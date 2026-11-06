@@ -3,5 +3,6 @@ pub mod anthropic;
 pub mod gemini;
 pub mod http;
 pub mod json;
+pub mod pitchout;
 pub mod prompts;
 pub mod resilient;

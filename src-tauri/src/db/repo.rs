@@ -102,6 +102,8 @@ pub struct TrackView {
     pub duration_s: Option<f64>,
     pub created_at: i64,
     pub analysis: Option<Value>,
+    /// Wszystkie wersje pitchu (najnowsze pierwsze); aktualna ma `is_current`.
+    pub pitches: Vec<super::pitches::PitchView>,
 }
 
 pub fn get_track(conn: &Connection, id: i64) -> AppResult<Option<TrackView>> {
@@ -126,10 +128,15 @@ pub fn get_track(conn: &Connection, id: i64) -> AppResult<Option<TrackView>> {
                     duration_s: r.get(8)?,
                     created_at: r.get(9)?,
                     analysis: analysis.and_then(|s| serde_json::from_str(&s).ok()),
+                    pitches: vec![],
                 })
             },
         )
         .optional()?;
+    let mut row = row;
+    if let Some(t) = row.as_mut() {
+        t.pitches = super::pitches::list(conn, t.id)?;
+    }
     Ok(row)
 }
 

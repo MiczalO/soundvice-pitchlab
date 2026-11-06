@@ -225,6 +225,59 @@ pub fn start_pill_from_dossier(
     job_id
 }
 
+/// Pitch dla istniejącego utworu: `fresh` (pierwszy), `new` (inne ujęcie), `revise` (wg uwag).
+#[tauri::command]
+pub fn start_pitch(
+    app: tauri::AppHandle,
+    jobs: State<crate::jobs::Jobs>,
+    track_id: i64,
+    mode: String,
+    feedback: Option<String>,
+    current_text: Option<String>,
+) -> AppResult<u64> {
+    use crate::pitch::Mode;
+    let mode = match mode.as_str() {
+        "fresh" => Mode::Fresh,
+        "new" => Mode::NewVersion,
+        "revise" => {
+            let fb = feedback.unwrap_or_default();
+            if fb.trim().is_empty() {
+                return Err(AppError::Other("Wpisz uwagi do poprawki.".into()));
+            }
+            Mode::Revise(fb)
+        }
+        other => return Err(AppError::Other(format!("Nieznany tryb pitchu: {other}"))),
+    };
+    let (job_id, cancel) = jobs.start();
+    tauri::async_runtime::spawn(async move {
+        use tauri::Manager;
+        let res = crate::pitch::run(&app, job_id, &cancel, track_id, mode, current_text)
+            .await
+            .map(|_| ());
+        app.state::<crate::jobs::Jobs>().finish(job_id);
+        crate::jobs::emit_done(&app, done_event(job_id, Some(track_id), res));
+    });
+    Ok(job_id)
+}
+
+#[tauri::command]
+pub fn save_pitch_edit(db: State<Db>, track_id: i64, text: String) -> AppResult<i64> {
+    crate::db::pitches::save_edit(&mut *lock(&db)?, track_id, &text)
+}
+
+#[tauri::command]
+pub fn restore_pitch(db: State<Db>, pitch_id: i64) -> AppResult<()> {
+    crate::db::pitches::set_current(&mut *lock(&db)?, pitch_id)
+}
+
+#[tauri::command]
+pub fn add_to_examples(db: State<Db>, text: String) -> AppResult<()> {
+    if text.trim().is_empty() {
+        return Err(AppError::Other("Pitch jest pusty.".into()));
+    }
+    crate::db::rules::append_example(&*lock(&db)?, &text)
+}
+
 // ---------- artyści ----------
 
 fn lock<'a>(db: &'a State<'_, Db>) -> AppResult<std::sync::MutexGuard<'a, rusqlite::Connection>> {

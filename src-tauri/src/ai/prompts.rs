@@ -125,9 +125,172 @@ Zwróć sam tekst pigułki, bez wstępu."#
     )
 }
 
+/// Dane do promptu pitchu (`pitchPrompt` z prototypu, l. 566).
+pub struct PitchInput<'a> {
+    pub rules: &'a str,
+    pub examples: &'a str,
+    pub polish: bool,
+    pub title: &'a str,
+    pub artist: &'a str,
+    pub featuring: &'a str,
+    pub release_date: &'a str,
+    pub manager_notes: &'a str,
+    pub campaign_context: &'a str,
+    pub pill: &'a str,
+    pub analysis_json: &'a str,
+    /// Dodatkowy blok: prośba o nową wersję albo poprawki wg uwag.
+    pub extra: &'a str,
+}
+
+fn or_dash(s: &str) -> &str {
+    if s.trim().is_empty() { "—" } else { s.trim() }
+}
+
+pub fn pitch(i: &PitchInput) -> String {
+    let lang = if i.polish { "Polish" } else { "English" };
+    let examples = if i.examples.trim().is_empty() {
+        String::new()
+    } else {
+        format!(
+            "=== APPROVED EXAMPLE PITCHES (match tone and density, never copy facts) ===\n{}\n",
+            i.examples
+        )
+    };
+    let feat = if i.featuring.trim().is_empty() {
+        String::new()
+    } else {
+        format!("\nFeaturing / producer: {}", i.featuring)
+    };
+    let pill = if i.pill.trim().is_empty() {
+        "— (no pill: do not state any artist facts beyond the name)"
+    } else {
+        i.pill.trim()
+    };
+    format!(
+        r#"You are a senior music marketer at Repitch (Polish label & management) writing a Spotify for Artists editorial pitch.
+
+=== HOUSE RULES (follow strictly; written by the manager in Polish) ===
+{rules}
+
+{examples}
+=== TRACK ===
+Title: {title}
+Artist: {artist}{feat}
+Release date: {date}
+
+=== MANAGER NOTES (highest priority) ===
+{notes}
+
+=== CAMPAIGN CONTEXT ===
+{ctx}
+
+=== ARTIST PILL (verified facts; ignore anything marked [?]) ===
+{pill}
+
+=== AUDIO ANALYSIS (what is actually audible) ===
+{analysis}
+
+{extra}
+Write the pitch in {lang}. HARD LIMIT: the "pitch" string must be at most 500 characters including spaces; aim for 380-480.
+Also propose Spotify for Artists form fields based on the audio (use Spotify's usual wording; max 3 genres, max 3 moods).
+Return ONLY JSON:
+{{"pitch":"string","pitch_pl":"Polish translation for the manager (if pitch is already Polish, repeat it)","form":{{"genres":["max 3"],"moods":["max 3"],"styles":["e.g. Pop, Rap, Electronic subtypes"],"instruments":["string"],"culture":"string or empty","song_type":"e.g. Original / Remix / Acoustic","vocal_language":"string"}},"angle":"one sentence: which angle you chose and why","facts_used":["each artist/campaign fact used and its source: pill / notes / context / analysis"]}}"#,
+        rules = i.rules,
+        title = or_dash(i.title),
+        artist = i.artist,
+        date = or_dash(i.release_date),
+        notes = or_dash(i.manager_notes),
+        ctx = or_dash(i.campaign_context),
+        analysis = i.analysis_json,
+        extra = i.extra,
+    )
+}
+
+/// Prośba o wyraźnie inną wersję niż poprzednia.
+pub fn new_version_extra(previous: &str) -> String {
+    format!(
+        "=== NEW VERSION ===\nWrite a clearly different take than this previous version (different opening and angle):\n{previous}\n"
+    )
+}
+
+/// Poprawki wg uwag managera.
+pub fn revision_extra(current: &str, feedback: &str) -> String {
+    format!(
+        "=== REVISION REQUEST ===\nCurrent pitch:\n{current}\nManager feedback (apply it, keep everything else that works):\n{feedback}\n"
+    )
+}
+
+/// Jednorazowe skrócenie pitchu powyżej limitu 500 znaków.
+pub fn shorten(pitch: &str) -> String {
+    format!(
+        "Shorten this Spotify editorial pitch to at most 480 characters including spaces. Keep the genre framing, the strongest fact and the promo plan. Do not add anything new. Return ONLY JSON {{\"pitch\":\"...\",\"pitch_pl\":\"...\"}}\n\n{pitch}"
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn input<'a>() -> PitchInput<'a> {
+        PitchInput {
+            rules: "ZASADY-TEKST",
+            examples: "",
+            polish: false,
+            title: "RETRO",
+            artist: "Mata",
+            featuring: "",
+            release_date: "",
+            manager_notes: "",
+            campaign_context: "TikTok",
+            pill: "",
+            analysis_json: "{\"primary_genre\":\"rap\"}",
+            extra: "",
+        }
+    }
+
+    #[test]
+    fn pitch_prompt_sections_and_defaults() {
+        let p = pitch(&input());
+        assert!(p.contains(
+            "=== HOUSE RULES (follow strictly; written by the manager in Polish) ===\nZASADY-TEKST"
+        ));
+        assert!(!p.contains("APPROVED EXAMPLE PITCHES"));
+        assert!(p.contains("Title: RETRO\nArtist: Mata\nRelease date: —"));
+        assert!(p.contains("=== MANAGER NOTES (highest priority) ===\n—"));
+        assert!(p.contains("— (no pill: do not state any artist facts beyond the name)"));
+        assert!(p.contains("Write the pitch in English. HARD LIMIT"));
+        assert!(p.contains(r#"{"pitch":"string","pitch_pl":"#));
+        assert!(p.contains(r#""facts_used":["each artist/campaign fact used"#));
+    }
+
+    #[test]
+    fn pitch_prompt_with_everything() {
+        let mut i = input();
+        i.examples = "PRZYKŁAD";
+        i.featuring = "Białas";
+        i.polish = true;
+        i.pill = "PIGUŁKA";
+        i.manager_notes = "NOTATKI";
+        i.extra = "EXTRA-BLOK";
+        let p = pitch(&i);
+        assert!(p.contains(
+            "=== APPROVED EXAMPLE PITCHES (match tone and density, never copy facts) ===\nPRZYKŁAD"
+        ));
+        assert!(p.contains("Artist: Mata\nFeaturing / producer: Białas"));
+        assert!(
+            p.contains("=== ARTIST PILL (verified facts; ignore anything marked [?]) ===\nPIGUŁKA")
+        );
+        assert!(p.contains("EXTRA-BLOK\nWrite the pitch in Polish."));
+    }
+
+    #[test]
+    fn extras_and_shorten() {
+        assert!(new_version_extra("OLD").contains("different opening and angle):\nOLD\n"));
+        let r = revision_extra("CUR", "krócej");
+        assert!(r.contains("Current pitch:\nCUR\nManager feedback (apply it, keep everything else that works):\nkrócej"));
+        assert!(shorten("X").ends_with("\n\nX"));
+        assert!(shorten("X").contains("at most 480 characters"));
+    }
 
     #[test]
     fn research_prompt_includes_hints_and_context() {

@@ -1,5 +1,5 @@
 //! Pipeline „Analiza i pitch”: przygotowanie pliku → odsłuch Gemini → research/pigułka
-//! (krok pitchu dojdzie w kolejnym etapie).
+//! → pitch.
 
 use std::path::Path;
 
@@ -13,6 +13,7 @@ use crate::ai::{analysis, json, prompts, resilient};
 use crate::db::{Db, repo};
 use crate::error::{AppError, AppResult};
 use crate::jobs::{StepState, emit_step};
+use crate::pitch;
 use crate::research;
 use crate::settings;
 
@@ -311,12 +312,18 @@ pub async fn run(
             }
         }
     }
-    emit_step(
+    // Pitch z pigułki (jeśli jest), notatek, kontekstu kampanii i analizy.
+    if let Err(e) = pitch::run(
         app,
         job_id,
-        "pitch",
-        StepState::Skip,
-        Some("dostępne w kolejnym etapie".into()),
-    );
+        cancel,
+        saved.track_id,
+        pitch::Mode::Fresh,
+        None,
+    )
+    .await
+    {
+        return (track_id, Err(e));
+    }
     (track_id, Ok(()))
 }

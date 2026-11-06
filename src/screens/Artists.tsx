@@ -369,6 +369,13 @@ export function Artists({ active }: { active: boolean }) {
   const notify = useApp((s) => s.notify);
   const [list, setList] = useState<ArtistRow[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
+  const openArtistId = useApp((s) => s.openArtistId);
+  const [seenOpen, setSeenOpen] = useState<number | null>(null);
+  // „Otwórz pigułkę” z innego ekranu: dopasowanie stanu w trakcie renderu (wzorzec Reacta).
+  if (openArtistId != null && openArtistId !== seenOpen) {
+    setSeenOpen(openArtistId);
+    setSelected(openArtistId);
+  }
   const [detail, setDetail] = useState<ArtistDetail | null>(null);
   const [query, setQuery] = useState("");
   const [newName, setNewName] = useState("");

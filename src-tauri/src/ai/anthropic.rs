@@ -29,3 +29,42 @@ pub async fn ping(model: &str) -> AppResult<String> {
         .map(|t| t.trim().chars().take(20).collect())
         .ok_or_else(|| AppError::ModelOutput("pusta odpowiedź Claude".into()))
 }
+
+/// Zwykłe zapytanie tekstowe do Claude (silnik pitchu). Odpowiedź = sklejone bloki tekstu.
+pub async fn complete(
+    model: &str,
+    prompt: &str,
+    cancel: &tokio_util::sync::CancellationToken,
+) -> AppResult<String> {
+    let key = secrets::get(Secret::Anthropic)?;
+    let c = http::client();
+    let body = json!({
+        "model": model,
+        "max_tokens": 3000,
+        "messages": [{"role": "user", "content": prompt}]
+    });
+    let v: Value = super::gemini::cancellable(cancel, async {
+        let res = http::send("Anthropic", || {
+            c.post(URL)
+                .header("x-api-key", &key)
+                .header("anthropic-version", "2023-06-01")
+                .json(&body)
+        })
+        .await?;
+        Ok(res.json::<Value>().await?)
+    })
+    .await?;
+    let text: String = v["content"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter(|b| b["type"] == "text")
+                .filter_map(|b| b["text"].as_str())
+                .collect()
+        })
+        .unwrap_or_default();
+    if text.trim().is_empty() {
+        return Err(AppError::ModelOutput("pusta odpowiedź Claude".into()));
+    }
+    Ok(text)
+}

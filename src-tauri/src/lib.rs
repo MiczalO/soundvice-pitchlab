@@ -5,6 +5,7 @@ pub mod db;
 pub mod error;
 pub mod jobs;
 pub mod pipeline;
+pub mod pitch;
 pub mod research;
 pub mod secrets;
 pub mod settings;
@@ -37,6 +38,10 @@ pub fn run() {
             commands::prepare_audio,
             commands::start_analysis,
             commands::start_research,
+            commands::start_pitch,
+            commands::save_pitch_edit,
+            commands::restore_pitch,
+            commands::add_to_examples,
             commands::start_pill_from_dossier,
             commands::list_artists,
             commands::get_artist,

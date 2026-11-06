@@ -5,7 +5,9 @@ use rusqlite::Connection;
 use rusqlite_migration::{M, Migrations};
 
 pub mod artists;
+pub mod pitches;
 pub mod repo;
+pub mod rules;
 pub mod slug;
 
 /// Domyślne zasady pitchu (port 1:1 z prototypu, `DEFAULT_RULES`).

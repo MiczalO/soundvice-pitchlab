@@ -3,7 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open } from "@tauri-apps/plugin-dialog";
 import { AudioLines, Square, Upload, Sparkles } from "lucide-react";
-import { AnalysisView } from "../components/AnalysisView";
+import { TrackResult } from "../components/TrackResult";
 import { Player } from "../components/Player";
 import { Steps, type StepMap } from "../components/Steps";
 import {
@@ -26,6 +26,8 @@ export function Run({ active }: { active: boolean }) {
   const [artistNames, setArtistNames] = useState<ArtistRow[]>([]);
   const [forceResearch, setForceResearch] = useState(false);
   const [finished, setFinished] = useState(false);
+  /** Pokaż tylko wybrane kroki (np. sam pitch przy „Nowa wersja”). */
+  const [stepsOnly, setStepsOnly] = useState<string[] | undefined>(undefined);
   const [audio, setAudio] = useState<PreparedAudio | null>(null);
   const [preparing, setPreparing] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -144,6 +146,7 @@ export function Run({ active }: { active: boolean }) {
     if (!artist.trim()) return notify("Wpisz artystę");
     setError(null);
     setFinished(false);
+    setStepsOnly(undefined);
     setTrack(null);
     setSteps({});
     runningRef.current = true;
@@ -170,6 +173,32 @@ export function Run({ active }: { active: boolean }) {
       setRunning(false);
       setError(toAppError(e).message);
     }
+  };
+
+  /** Pitch dla już odsłuchanego utworu (bez ponownego odsłuchu): pierwszy, nowa wersja, poprawki. */
+  const startPitchJob = async (
+    mode: "fresh" | "new" | "revise",
+    feedback?: string,
+    currentText?: string,
+  ) => {
+    if (!track) return;
+    setError(null);
+    setFinished(false);
+    setStepsOnly(["pitch"]);
+    setSteps({});
+    runningRef.current = true;
+    setRunning(true);
+    try {
+      setJobId(await api.startPitch({ trackId: track.id, mode, feedback, currentText }));
+    } catch (e) {
+      runningRef.current = false;
+      setRunning(false);
+      setError(toAppError(e).message);
+    }
+  };
+
+  const reloadTrack = async () => {
+    if (track) setTrack(await api.getTrack(track.id));
   };
 
   const stop = () => {
@@ -323,7 +352,7 @@ export function Run({ active }: { active: boolean }) {
               </button>
             )}
           </div>
-          {steps && <Steps steps={steps} />}
+          {steps && <Steps steps={steps} only={stepsOnly} />}
           {finished && (
             <div className="finished">
               Gotowe — analiza zapisana. Kroki oznaczone „–” zostały pominięte (opis przy kroku).
@@ -334,24 +363,17 @@ export function Run({ active }: { active: boolean }) {
 
         <div className="panel sticky">
           {track?.analysis ? (
-            <>
-              <div className="result-head">
-                <div>
-                  <div className="eyebrow">{track.artist_name}</div>
-                  <h2 style={{ marginTop: 6 }}>{track.title || "Bez tytułu"}</h2>
-                </div>
-              </div>
-              <p className="hint">
-                Analiza zapisana. Pitch pojawi się w kolejnym etapie; pigułkę artysty edytujesz w
-                karcie Artyści.
-              </p>
-              <AnalysisView an={track.analysis} />
-            </>
+            <TrackResult
+              track={track}
+              busy={running}
+              onChanged={reloadTrack}
+              onJob={startPitchJob}
+            />
           ) : (
             <div className="empty-state">
               <div>
                 <div className="eyebrow">Wynik</div>
-                <h2 style={{ marginTop: 6 }}>Tu pojawi się analiza</h2>
+                <h2 style={{ marginTop: 6 }}>Tu pojawi się pitch</h2>
               </div>
               <ul className="preview-list">
                 <li>

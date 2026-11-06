@@ -1140,3 +1140,20 @@ ol.steps li.skip .t {
   color: var(--signal);
   font-weight: 600;
 }
+
+.pitch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.panel.sticky {
+  max-height: calc(100vh - 100px);
+  overflow: auto;
+}
+@media (max-width: 900px) {
+  .panel.sticky {
+    max-height: none;
+    overflow: visible;
+  }
+}

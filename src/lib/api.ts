@@ -74,6 +74,16 @@ export const api = {
   startResearch: (artistId: number) => invoke<number>("start_research", { artistId }),
   startPillFromDossier: (artistId: number, dossier: string) =>
     invoke<number>("start_pill_from_dossier", { artistId, dossier }),
+  startPitch: (args: {
+    trackId: number;
+    mode: "fresh" | "new" | "revise";
+    feedback?: string;
+    currentText?: string;
+  }) => invoke<number>("start_pitch", args),
+  savePitchEdit: (trackId: number, text: string) =>
+    invoke<number>("save_pitch_edit", { trackId, text }),
+  restorePitch: (pitchId: number) => invoke<void>("restore_pitch", { pitchId }),
+  addToExamples: (text: string) => invoke<void>("add_to_examples", { text }),
   cancelJob: (jobId: number) => invoke<void>("cancel_job", { jobId }),
   getTrack: (trackId: number) => invoke<TrackView | null>("get_track", { trackId }),
 };
@@ -136,6 +146,7 @@ export interface TrackView {
   duration_s: number | null;
   created_at: number;
   analysis: Analysis | null;
+  pitches: PitchView[];
 }
 
 export type StepState = "active" | "done" | "skip" | "err";
@@ -194,4 +205,27 @@ export interface ArtistDetail {
   proposal: Proposal | null;
   history: HistoryRow[];
   tracks: TrackBrief[];
+}
+
+export interface PitchForm {
+  genres: string[];
+  moods: string[];
+  styles: string[];
+  instruments: string[];
+  culture: string;
+  song_type: string;
+  vocal_language: string;
+}
+export interface PitchView {
+  id: number;
+  text: string;
+  text_pl: string;
+  form: Partial<PitchForm> | null;
+  angle: string;
+  facts_used: string[];
+  engine: string;
+  model: string;
+  is_manual_edit: boolean;
+  is_current: boolean;
+  created_at: number;
 }
