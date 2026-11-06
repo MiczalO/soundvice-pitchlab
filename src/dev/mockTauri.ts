@@ -268,17 +268,34 @@ const commands: Record<string, (a: Record<string, unknown>) => unknown> = {
     file_name: "Test Artysta - DYMI2_v1.wav",
     waveform: { peaks, duration_s: 144 },
   }),
-  start_analysis: () =>
-    simulateJob(
-      [
-        ["audio", 600],
-        ["listen", 1200],
-        ["research", 400],
-        ["pill", 300],
-        ["pitch", 1000],
-      ],
-      1,
-    ),
+  start_analysis: () => {
+    // Jak przy braku wyszukiwarki Google: research i pigułka pominięte, pitch gotowy.
+    const steps: [string, string, number][] = [
+      ["audio", "done", 300],
+      ["listen", "done", 900],
+      ["research", "skip", 200],
+      ["pill", "skip", 200],
+      ["pitch", "done", 700],
+    ];
+    let t = 100;
+    for (const [step, state, ms] of steps) {
+      if (state === "done")
+        later(t, () => emit("job-step", { job_id: 9, step, state: "active", sub: "pracuję…" }));
+      t += ms;
+      later(t, () =>
+        emit("job-step", {
+          job_id: 9,
+          step,
+          state,
+          sub: state === "skip" ? "wyszukiwarka Google niedostępna w Twoim planie" : "gotowe",
+        }),
+      );
+    }
+    later(t + 100, () =>
+      emit("job-done", { job_id: 9, track_id: 1, cancelled: false, error: null }),
+    );
+    return 9;
+  },
   start_pitch: () => simulateJob([["pitch", 1200]], 1),
   cancel_job: () => null,
   get_track: () => track,
@@ -305,7 +322,7 @@ const commands: Record<string, (a: Record<string, unknown>) => unknown> = {
   restore_backup: () => null,
   get_data_dir: () => "C:/mock",
   "plugin:updater|check": () => null,
-  "plugin:dialog|open": () => "C:/mock/plik",
+  "plugin:dialog|open": () => "C:/mock/Master.wav",
   "plugin:dialog|save": () => "C:/mock/kopia.zip",
   "plugin:opener|reveal_item_in_dir": () => null,
   "plugin:opener|open_url": () => null,

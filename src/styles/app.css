@@ -132,7 +132,7 @@ a {
 .app[data-collapsed="true"] {
   --side-w: 80px;
 }
-.skip {
+.skip-link {
   position: absolute;
   left: 16px;
   top: -48px;
@@ -144,7 +144,7 @@ a {
   font-weight: 700;
   text-decoration: none;
 }
-.skip:focus {
+.skip-link:focus {
   top: 16px;
 }
 .sidebar {

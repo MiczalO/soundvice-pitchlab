@@ -120,7 +120,7 @@ export default function App() {
 
   return (
     <div className="app" data-collapsed={collapsed} data-user-expanded={side === "expanded"}>
-      <a className="skip" href="#main">
+      <a className="skip-link" href="#main">
         Przejdź do treści
       </a>
       <aside className="sidebar" aria-label="Pasek boczny">
