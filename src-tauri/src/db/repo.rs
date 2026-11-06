@@ -98,6 +98,7 @@ pub struct TrackView {
     pub featuring: String,
     pub release_date: Option<String>,
     pub campaign_context: String,
+    pub lyrics: String,
     pub audio_path: Option<String>,
     pub duration_s: Option<f64>,
     pub created_at: i64,
@@ -110,12 +111,12 @@ pub fn get_track(conn: &Connection, id: i64) -> AppResult<Option<TrackView>> {
     let row = conn
         .query_row(
             "SELECT t.id, t.artist_id, a.name, t.title, t.featuring, t.release_date,
-                    t.campaign_context, t.audio_path, t.duration_s, t.created_at,
+                    t.campaign_context, t.lyrics, t.audio_path, t.duration_s, t.created_at,
                     (SELECT json FROM analyses WHERE track_id=t.id ORDER BY id DESC LIMIT 1)
              FROM tracks t JOIN artists a ON a.id=t.artist_id WHERE t.id=?1",
             [id],
             |r| {
-                let analysis: Option<String> = r.get(10)?;
+                let analysis: Option<String> = r.get(11)?;
                 Ok(TrackView {
                     id: r.get(0)?,
                     artist_id: r.get(1)?,
@@ -124,9 +125,10 @@ pub fn get_track(conn: &Connection, id: i64) -> AppResult<Option<TrackView>> {
                     featuring: r.get(4)?,
                     release_date: r.get(5)?,
                     campaign_context: r.get(6)?,
-                    audio_path: r.get(7)?,
-                    duration_s: r.get(8)?,
-                    created_at: r.get(9)?,
+                    lyrics: r.get(7)?,
+                    audio_path: r.get(8)?,
+                    duration_s: r.get(9)?,
+                    created_at: r.get(10)?,
                     analysis: analysis.and_then(|s| serde_json::from_str(&s).ok()),
                     pitches: vec![],
                 })

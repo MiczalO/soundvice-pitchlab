@@ -13,6 +13,10 @@ pub mod slug;
 /// Domyślne zasady pitchu (port 1:1 z prototypu, `DEFAULT_RULES`).
 pub const DEFAULT_RULES: &str = include_str!("default_rules.txt");
 
+/// Poprzednia domyślna wersja zasad (z prototypu). Jeśli użytkownik jej nie zmieniał,
+/// przy starcie dostaje nową domyślną jako kolejną wersję (stara zostaje w historii).
+const DEFAULT_RULES_V1: &str = include_str!("default_rules_v1.txt");
+
 static MIGRATIONS: LazyLock<Migrations<'static>> =
     LazyLock::new(|| Migrations::new(vec![M::up(include_str!("migrations/0001_init.sql"))]));
 
@@ -40,6 +44,19 @@ fn seed_defaults(conn: &Connection) -> rusqlite::Result<()> {
         "INSERT OR IGNORE INTO settings (key, value) VALUES ('pitch_lang', 'en')",
         (),
     )?;
+    // Uaktualnienie nietkniętych zasad ze starej wersji domyślnej do obecnej.
+    let current: String = conn.query_row(
+        "SELECT body FROM rules WHERE kind='rules' ORDER BY version DESC LIMIT 1",
+        [],
+        |r| r.get(0),
+    )?;
+    if current.trim() == DEFAULT_RULES_V1.trim() {
+        conn.execute(
+            "INSERT INTO rules (kind, version, body, created_at)
+             SELECT 'rules', MAX(version) + 1, ?1, ?2 FROM rules WHERE kind='rules'",
+            (DEFAULT_RULES, now),
+        )?;
+    }
     Ok(())
 }
 
@@ -109,6 +126,41 @@ mod tests {
             })
             .unwrap();
         assert!(body.contains("LIMIT: maksymalnie 500 znaków"));
+    }
+
+    #[test]
+    fn untouched_old_default_rules_are_upgraded_once() {
+        let mut c = mem();
+        c.execute(
+            "UPDATE rules SET body=?1 WHERE kind='rules'",
+            [DEFAULT_RULES_V1],
+        )
+        .unwrap();
+        migrate(&mut c).unwrap();
+        migrate(&mut c).unwrap(); // drugi start nie dubluje
+        let n: i64 = c
+            .query_row("SELECT COUNT(*) FROM rules WHERE kind='rules'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(n, 2);
+        assert_eq!(rules::current(&c, "rules"), DEFAULT_RULES);
+    }
+
+    #[test]
+    fn user_edited_rules_are_never_overwritten() {
+        let mut c = mem();
+        c.execute("UPDATE rules SET body='MOJE ZASADY' WHERE kind='rules'", [])
+            .unwrap();
+        migrate(&mut c).unwrap();
+        assert_eq!(rules::current(&c, "rules"), "MOJE ZASADY");
+    }
+
+    #[test]
+    fn new_default_describes_the_track_not_the_artist() {
+        assert!(DEFAULT_RULES.contains("NIE OPISUJ ARTYSTY"));
+        assert!(DEFAULT_RULES.contains("LIMIT: maksymalnie 500 znaków ze spacjami"));
+        assert_ne!(DEFAULT_RULES.trim(), DEFAULT_RULES_V1.trim());
     }
 
     #[test]

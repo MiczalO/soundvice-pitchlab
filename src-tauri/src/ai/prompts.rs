@@ -136,6 +136,8 @@ pub struct PitchInput<'a> {
     pub release_date: &'a str,
     pub manager_notes: &'a str,
     pub campaign_context: &'a str,
+    /// Tekst lub opis tekstu od managera (o czym jest utwór).
+    pub lyrics: &'a str,
     pub pill: &'a str,
     pub analysis_json: &'a str,
     /// Dodatkowy blok: prośba o nową wersję albo poprawki wg uwag.
@@ -161,6 +163,14 @@ pub fn pitch(i: &PitchInput) -> String {
     } else {
         format!("\nFeaturing / producer: {}", i.featuring)
     };
+    let lyrics_block = if i.lyrics.trim().is_empty() {
+        String::new()
+    } else {
+        format!(
+            "=== LYRICS / DESCRIPTION FROM MANAGER (what the song is about) ===\n{}\n\n",
+            i.lyrics.trim()
+        )
+    };
     let pill = if i.pill.trim().is_empty() {
         "— (no pill: do not state any artist facts beyond the name)"
     } else {
@@ -184,7 +194,7 @@ Release date: {date}
 === CAMPAIGN CONTEXT ===
 {ctx}
 
-=== ARTIST PILL (verified facts; ignore anything marked [?]) ===
+{lyrics}=== ARTIST PILL (verified facts; ignore anything marked [?]) ===
 {pill}
 
 === AUDIO ANALYSIS (what is actually audible) ===
@@ -201,6 +211,7 @@ Return ONLY JSON:
         date = or_dash(i.release_date),
         notes = or_dash(i.manager_notes),
         ctx = or_dash(i.campaign_context),
+        lyrics = lyrics_block,
         analysis = i.analysis_json,
         extra = i.extra,
     )
@@ -242,6 +253,7 @@ mod tests {
             release_date: "",
             manager_notes: "",
             campaign_context: "TikTok",
+            lyrics: "",
             pill: "",
             analysis_json: "{\"primary_genre\":\"rap\"}",
             extra: "",
@@ -255,6 +267,7 @@ mod tests {
             "=== HOUSE RULES (follow strictly; written by the manager in Polish) ===\nZASADY-TEKST"
         ));
         assert!(!p.contains("APPROVED EXAMPLE PITCHES"));
+        assert!(!p.contains("LYRICS / DESCRIPTION"));
         assert!(p.contains("Title: RETRO\nArtist: Mata\nRelease date: —"));
         assert!(p.contains("=== MANAGER NOTES (highest priority) ===\n—"));
         assert!(p.contains("— (no pill: do not state any artist facts beyond the name)"));
@@ -272,6 +285,7 @@ mod tests {
         i.pill = "PIGUŁKA";
         i.manager_notes = "NOTATKI";
         i.extra = "EXTRA-BLOK";
+        i.lyrics = "o tęsknocie za latem";
         let p = pitch(&i);
         assert!(p.contains(
             "=== APPROVED EXAMPLE PITCHES (match tone and density, never copy facts) ===\nPRZYKŁAD"
@@ -281,6 +295,9 @@ mod tests {
             p.contains("=== ARTIST PILL (verified facts; ignore anything marked [?]) ===\nPIGUŁKA")
         );
         assert!(p.contains("EXTRA-BLOK\nWrite the pitch in Polish."));
+        assert!(p.contains(
+            "=== LYRICS / DESCRIPTION FROM MANAGER (what the song is about) ===\no tęsknocie za latem\n\n=== ARTIST PILL"
+        ));
     }
 
     #[test]
