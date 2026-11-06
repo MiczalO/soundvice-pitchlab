@@ -25,6 +25,7 @@ export function Run({ active }: { active: boolean }) {
   const openTrackId = useApp((s) => s.openTrackId);
   const [artistNames, setArtistNames] = useState<ArtistRow[]>([]);
   const [forceResearch, setForceResearch] = useState(false);
+  const [finished, setFinished] = useState(false);
   const [audio, setAudio] = useState<PreparedAudio | null>(null);
   const [preparing, setPreparing] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -125,6 +126,7 @@ export function Run({ active }: { active: boolean }) {
         const d = e.payload;
         if (d.cancelled) notify("Zatrzymano");
         else if (d.error) setError(d.error.message);
+        else setFinished(true);
         if (d.track_id != null) setTrack(await api.getTrack(d.track_id));
         api
           .listArtists()
@@ -141,6 +143,7 @@ export function Run({ active }: { active: boolean }) {
     if (!audio) return notify("Najpierw wybierz plik audio");
     if (!artist.trim()) return notify("Wpisz artystę");
     setError(null);
+    setFinished(false);
     setTrack(null);
     setSteps({});
     runningRef.current = true;
@@ -321,6 +324,11 @@ export function Run({ active }: { active: boolean }) {
             )}
           </div>
           {steps && <Steps steps={steps} />}
+          {finished && (
+            <div className="finished">
+              Gotowe — analiza zapisana. Kroki oznaczone „–” zostały pominięte (opis przy kroku).
+            </div>
+          )}
           {error && <div className="err-box">{error}</div>}
         </div>
 

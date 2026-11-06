@@ -18,7 +18,7 @@ export function Steps({ steps, only }: { steps: StepMap; only?: string[] }) {
         const s = steps[key] ?? { state: "", sub: "" };
         return (
           <li key={key} className={s.state === "err" ? "err" : s.state}>
-            <span className="dot">{i + 1}</span>
+            <span className="dot">{s.state === "skip" ? "–" : i + 1}</span>
             <div>
               <div className="t">{label}</div>
               <div className="sub">{s.sub}</div>

@@ -1124,3 +1124,19 @@ a {
 .search {
   width: 100%;
 }
+ol.steps li.skip .dot {
+  opacity: 1;
+  border-style: dashed;
+  color: var(--muted);
+}
+ol.steps li.skip .t {
+  color: var(--muted);
+}
+.finished {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 13.5px;
+  color: var(--signal);
+  font-weight: 600;
+}
