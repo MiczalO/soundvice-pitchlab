@@ -12,6 +12,7 @@ export function Wizard() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [step, setStep] = useState<1 | 2>(1);
+  const [limited, setLimited] = useState(false);
 
   const connect = async () => {
     setBusy(true);
@@ -42,10 +43,18 @@ export function Wizard() {
       await saveSetting("onboarded", "1");
       notify(`Połączono z Gemini (${r.gemini ?? "OK"})`);
     } catch (e) {
-      setErr(toAppError(e).message);
+      const ae = toAppError(e);
+      setErr(ae.message);
+      // Klucz jest poprawny (lista modeli się pobrała) — limit dotyczy tylko wybranego modelu.
+      setLimited(ae.code === "rate_limited");
     } finally {
       setBusy(false);
     }
+  };
+
+  const startAnyway = async () => {
+    await saveSetting("onboarded", "1");
+    notify("Klucz działa. Zmień model w Ustawieniach, jeśli ten ma wyczerpany limit.");
   };
 
   return (
@@ -133,6 +142,11 @@ export function Wizard() {
               <button className="btn primary big" disabled={busy} onClick={finish}>
                 {busy ? "Sprawdzam…" : "Sprawdź i zacznij"}
               </button>
+              {limited && (
+                <button className="btn" disabled={busy} onClick={startAnyway}>
+                  Zacznij mimo to
+                </button>
+              )}
             </div>
           </div>
         )}

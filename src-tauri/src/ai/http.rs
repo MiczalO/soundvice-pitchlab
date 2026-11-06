@@ -20,13 +20,20 @@ pub async fn send(service: &'static str, make: impl Fn() -> RequestBuilder) -> A
     let mut res = make().send().await?;
     if res.status() == StatusCode::TOO_MANY_REQUESTS {
         let wait = retry_after(&res).unwrap_or(20).min(60);
+        let body = res.text().await.unwrap_or_default();
+        // Brak przydziału / limit dzienny: ponawianie nic nie da, więc nie czekamy.
+        if is_hard_quota(&body) {
+            return Err(classify(service, 429, &body));
+        }
         tokio::time::sleep(Duration::from_secs(wait)).await;
         res = make().send().await?;
-        if res.status() == StatusCode::TOO_MANY_REQUESTS {
-            return Err(AppError::RateLimited(service));
-        }
     }
     check(service, res).await
+}
+
+/// Limit, który nie zniknie po kilkunastu sekundach.
+fn is_hard_quota(body: &str) -> bool {
+    body.contains("limit: 0") || body.contains("PerDay")
 }
 
 fn retry_after(res: &Response) -> Option<u64> {
@@ -61,7 +68,16 @@ pub fn classify(service: &'static str, status: u16, body: &str) -> AppError {
         return AppError::BadKey(service);
     }
     if status == 429 {
-        return AppError::RateLimited(service);
+        let hint = if body.contains("limit: 0") {
+            "Ten model nie ma przydziału w Twoim planie (darmowy plan zwykle nie obejmuje modeli Pro). \
+             Wybierz model flash w Ustawieniach albo włącz płatny plan."
+        } else if body.contains("PerDay") {
+            "Wyczerpany dzienny limit. Spróbuj jutro albo zmień model lub plan."
+        } else {
+            "Odczekaj chwilę i spróbuj ponownie albo zmień model."
+        };
+        let google: String = message.chars().take(200).collect();
+        return AppError::RateLimited(service, format!("{hint} (odpowiedź: {google})"));
     }
     AppError::Api {
         service,
@@ -78,6 +94,28 @@ mod tests {
     fn invalid_gemini_key_is_bad_key() {
         let body = r#"{"error":{"code":400,"message":"API key not valid. Please pass a valid API key.","status":"INVALID_ARGUMENT","details":[{"reason":"API_KEY_INVALID"}]}}"#;
         assert_eq!(classify("Gemini", 400, body).code(), "bad_key");
+    }
+
+    #[test]
+    fn zero_quota_explains_plan_and_keeps_google_message() {
+        let body = r#"{"error":{"code":429,"message":"Quota exceeded for metric ... limit: 0, model: gemini-3.1-pro"}}"#;
+        let e = classify("Gemini", 429, body);
+        assert_eq!(e.code(), "rate_limited");
+        let m = e.to_string();
+        assert!(m.contains("nie ma przydziału"), "{m}");
+        assert!(m.contains("limit: 0"), "{m}");
+        assert!(is_hard_quota(body));
+    }
+
+    #[test]
+    fn transient_429_suggests_waiting() {
+        let e = classify(
+            "Gemini",
+            429,
+            r#"{"error":{"message":"Resource exhausted"}}"#,
+        );
+        assert!(e.to_string().contains("Odczekaj chwilę"));
+        assert!(!is_hard_quota("Resource exhausted"));
     }
 
     #[test]

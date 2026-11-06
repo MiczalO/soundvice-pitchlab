@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { AudioLines, Clock, FileText, Settings2, Users, type LucideIcon } from "lucide-react";
 import { Brand } from "./components/Brand";
 import { useApp, type Tab } from "./lib/store";
+import { Run } from "./screens/Run";
 import { Settings } from "./screens/Settings";
 import { Wizard } from "./screens/Wizard";
 import "./styles/app.css";
@@ -62,7 +63,13 @@ export default function App() {
         </div>
       </header>
       <main className="wrap">
-        {tab === "settings" ? <Settings /> : <Soon title={TABS.find((t) => t.id === tab)!.label} />}
+        <div hidden={tab !== "run"}>
+          <Run active={tab === "run"} />
+        </div>
+        {tab === "settings" && <Settings />}
+        {tab !== "run" && tab !== "settings" && (
+          <Soon title={TABS.find((t) => t.id === tab)!.label} />
+        )}
       </main>
       {toast && <div className="toast">{toast}</div>}
     </>

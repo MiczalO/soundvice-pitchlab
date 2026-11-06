@@ -4,6 +4,7 @@ use std::sync::{LazyLock, Mutex};
 use rusqlite::Connection;
 use rusqlite_migration::{M, Migrations};
 
+pub mod repo;
 pub mod slug;
 
 /// Domyślne zasady pitchu (port 1:1 z prototypu, `DEFAULT_RULES`).

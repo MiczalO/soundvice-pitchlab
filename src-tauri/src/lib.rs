@@ -1,7 +1,10 @@
 pub mod ai;
+pub mod audio;
 mod commands;
 pub mod db;
 pub mod error;
+pub mod jobs;
+pub mod pipeline;
 pub mod secrets;
 pub mod settings;
 
@@ -11,6 +14,8 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .manage(jobs::Jobs::default())
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
@@ -27,6 +32,10 @@ pub fn run() {
             commands::set_setting,
             commands::list_gemini_models,
             commands::test_connection,
+            commands::prepare_audio,
+            commands::start_analysis,
+            commands::cancel_job,
+            commands::get_track,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

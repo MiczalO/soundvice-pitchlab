@@ -26,4 +26,81 @@ export const api = {
   listGeminiModels: () => invoke<string[]>("list_gemini_models"),
   testConnection: (args: { geminiModel?: string; claudeModel?: string; checkClaude: boolean }) =>
     invoke<{ gemini: string | null; claude: string | null }>("test_connection", args),
+  prepareAudio: (path: string) => invoke<PreparedAudio>("prepare_audio", { path }),
+  startAnalysis: (params: AnalysisParams) => invoke<number>("start_analysis", { params }),
+  cancelJob: (jobId: number) => invoke<void>("cancel_job", { jobId }),
+  getTrack: (trackId: number) => invoke<TrackView | null>("get_track", { trackId }),
 };
+
+export interface PreparedAudio {
+  path: string;
+  hash: string;
+  size: number;
+  mime: string;
+  file_name: string;
+  waveform: { peaks: number[]; duration_s: number } | null;
+}
+
+export interface AnalysisParams {
+  filePath: string;
+  hash: string;
+  mime: string;
+  fileName: string;
+  size: number;
+  durationS: number | null;
+  title: string;
+  artist: string;
+  featuring: string;
+  releaseDate: string | null;
+  campaignContext: string;
+  lyrics: string;
+}
+
+export interface Analysis {
+  primary_genre: string;
+  subgenres: string[];
+  genre_rationale: string;
+  bpm: number | null;
+  key: string | null;
+  energy: number | null;
+  moods: string[];
+  instruments: string[];
+  production_notes: string;
+  vocals: { type: string; language: string; delivery: string; features: string | null };
+  lyrics_themes: string[];
+  lyrics_summary: string;
+  hook: string;
+  structure: { t: string; section: string }[];
+  standout_moments: { t: string; desc: string }[];
+  sound_alikes: string[];
+  explicit_content: boolean | null;
+  editorial_angle: string;
+}
+
+export interface TrackView {
+  id: number;
+  artist_id: number;
+  artist_name: string;
+  title: string;
+  featuring: string;
+  release_date: string | null;
+  campaign_context: string;
+  audio_path: string | null;
+  duration_s: number | null;
+  created_at: number;
+  analysis: Analysis | null;
+}
+
+export type StepState = "active" | "done" | "skip" | "err";
+export interface StepEvent {
+  job_id: number;
+  step: string;
+  state: StepState;
+  sub: string | null;
+}
+export interface DoneEvent {
+  job_id: number;
+  track_id: number | null;
+  cancelled: boolean;
+  error: AppError | null;
+}

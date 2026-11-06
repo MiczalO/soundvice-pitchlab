@@ -1,7 +1,7 @@
 use serde::Serialize;
 
 /// Błąd przekazywany do UI: stabilny `code` + polski komunikat z instrukcją.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum AppError {
     #[error("Brak klucza API ({0}). Wpisz go w Ustawieniach.")]
     NoKey(&'static str),
@@ -9,10 +9,8 @@ pub enum AppError {
         "Klucz API ({0}) został odrzucony. Sprawdź, czy został wklejony w całości i czy jest aktywny."
     )]
     BadKey(&'static str),
-    #[error(
-        "Przekroczono limit zapytań ({0}). Odczekaj chwilę i spróbuj ponownie albo zmień model."
-    )]
-    RateLimited(&'static str),
+    #[error("Przekroczono limit zapytań ({0}). {1}")]
+    RateLimited(&'static str, String),
     #[error(
         "Brak połączenia z siecią lub serwer nie odpowiada. Sprawdź internet i spróbuj ponownie."
     )]
@@ -42,7 +40,7 @@ impl AppError {
         match self {
             AppError::NoKey(_) => "no_key",
             AppError::BadKey(_) => "bad_key",
-            AppError::RateLimited(_) => "rate_limited",
+            AppError::RateLimited(..) => "rate_limited",
             AppError::Network => "network",
             AppError::Timeout => "timeout",
             AppError::Api { .. } => "api",
