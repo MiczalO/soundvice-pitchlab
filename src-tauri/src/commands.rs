@@ -45,9 +45,19 @@ pub fn set_setting(db: State<Db>, key: String, value: String) -> AppResult<()> {
     settings::set(&conn, &key, &value)
 }
 
+/// Twardy limit czasu dla krótkich zapytań (lista modeli, test połączenia).
+async fn within<T>(
+    secs: u64,
+    fut: impl std::future::Future<Output = AppResult<T>>,
+) -> AppResult<T> {
+    tokio::time::timeout(std::time::Duration::from_secs(secs), fut)
+        .await
+        .unwrap_or(Err(AppError::Timeout))
+}
+
 #[tauri::command]
 pub async fn list_gemini_models() -> AppResult<Vec<String>> {
-    gemini::list_models().await
+    within(45, gemini::list_models()).await
 }
 
 #[derive(Serialize)]
@@ -66,12 +76,12 @@ pub async fn test_connection(
     let gm = gemini_model
         .filter(|m| !m.is_empty())
         .unwrap_or_else(|| gemini::FALLBACK_MODEL.into());
-    let g = gemini::ping(&gm).await?;
+    let g = within(60, gemini::ping(&gm)).await?;
     let c = if check_claude {
         let cm = claude_model
             .filter(|m| !m.is_empty())
             .unwrap_or_else(|| anthropic::DEFAULT_MODEL.into());
-        Some(anthropic::ping(&cm).await?)
+        Some(within(60, anthropic::ping(&cm)).await?)
     } else {
         None
     };

@@ -16,6 +16,31 @@ export function toAppError(e: unknown): AppError {
   return { code: "other", message: String(e) };
 }
 
+/** Zabezpieczenie UI: gdyby backend nie odpowiedział (np. restart w trybie dev), przycisk nie wisi w nieskończoność. */
+export function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(
+      () =>
+        reject({
+          code: "timeout",
+          message:
+            "Brak odpowiedzi z aplikacji. Spróbuj ponownie; jeśli się powtarza, zrestartuj aplikację.",
+        }),
+      ms,
+    );
+    p.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      },
+    );
+  });
+}
+
 export const api = {
   appVersion: () => invoke<string>("app_version"),
   setSecret: (name: SecretName, value: string) => invoke<void>("set_secret", { name, value }),
@@ -23,9 +48,12 @@ export const api = {
   deleteSecret: (name: SecretName) => invoke<void>("delete_secret", { name }),
   getSettings: () => invoke<Record<string, string>>("get_settings"),
   setSetting: (key: string, value: string) => invoke<void>("set_setting", { key, value }),
-  listGeminiModels: () => invoke<string[]>("list_gemini_models"),
+  listGeminiModels: () => withTimeout(invoke<string[]>("list_gemini_models"), 60_000),
   testConnection: (args: { geminiModel?: string; claudeModel?: string; checkClaude: boolean }) =>
-    invoke<{ gemini: string | null; claude: string | null }>("test_connection", args),
+    withTimeout(
+      invoke<{ gemini: string | null; claude: string | null }>("test_connection", args),
+      150_000,
+    ),
   prepareAudio: (path: string) => invoke<PreparedAudio>("prepare_audio", { path }),
   startAnalysis: (params: AnalysisParams) => invoke<number>("start_analysis", { params }),
   cancelJob: (jobId: number) => invoke<void>("cancel_job", { jobId }),
