@@ -134,6 +134,9 @@ base64 -i certyfikat.p12 | pbcopy
 
 ## Rozwiązywanie problemów z builderem
 
+- **macOS: `failed to import the signing certificate as a PKCS#12 (.p12) file`** mimo braku sekretów Apple: Tauri
+  traktuje **pustą** zmienną `APPLE_CERTIFICATE` jak ustawioną. Zmiennych `APPLE_*` nie wolno przekazywać do kroku budowania
+  jako puste — workflow ustawia je (przez `GITHUB_ENV`) tylko wtedy, gdy sekret istnieje.
 - **Brak WiX (MSI)** przy lokalnym buildzie: Tauri pobiera go przy pierwszym użyciu (potrzebny internet).
 - **`tauri::generate_context!` nie widzi `dist`:** najpierw `npm run build` (CI robi to przed Rustem).
 - **Ostrzeżenie `Failed to load a font face ... malformed font`** podczas `tauri icon` pochodzi z czcionek systemowych

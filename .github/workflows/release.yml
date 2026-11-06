@@ -60,12 +60,6 @@ jobs:
       # Wszystkie sekrety są opcjonalne: bez nich powstają niepodpisane instalatory.
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
       WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
     steps:
@@ -115,10 +109,33 @@ jobs:
         shell: bash
         run: echo "::warning::Brak sekretu WINDOWS_CERTIFICATE - instalator nie będzie podpisany (SmartScreen pokaże ostrzeżenie)."
 
-      - name: macOS bez certyfikatu Apple
-        if: runner.os == 'macOS' && env.APPLE_CERTIFICATE == ''
+      # --- macOS: podpisywanie i notaryzacja Apple (opcjonalne) ---
+      # UWAGA: Tauri traktuje PUSTĄ zmienną APPLE_CERTIFICATE jak ustawioną i próbuje importować certyfikat
+      # (błąd „Unable to decode the provided data”). Dlatego zmienne Apple trafiają do kroku budowania
+      # wyłącznie wtedy, gdy odpowiedni sekret istnieje i nie jest pusty.
+      - name: macOS - dane podpisywania Apple (jeśli są sekrety)
+        if: runner.os == 'macOS'
         shell: bash
-        run: echo "::warning::Brak sekretów Apple - aplikacja nie będzie podpisana ani notaryzowana (Gatekeeper zablokuje pierwsze uruchomienie)."
+        env:
+          S_APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          S_APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          S_APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          S_APPLE_ID: ${{ secrets.APPLE_ID }}
+          S_APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          S_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$S_APPLE_CERTIFICATE" ]; then
+            echo "::warning::Brak sekretu APPLE_CERTIFICATE - aplikacja nie będzie podpisana ani notaryzowana (Gatekeeper zablokuje pierwsze uruchomienie)."
+            exit 0
+          fi
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            src="S_$name"
+            value="${!src}"
+            if [ -n "$value" ]; then
+              echo "$name=$value" >> "$GITHUB_ENV"
+            fi
+          done
+          echo "Podpisywanie Apple włączone."
 
       - uses: tauri-apps/tauri-action@v0
         env:
