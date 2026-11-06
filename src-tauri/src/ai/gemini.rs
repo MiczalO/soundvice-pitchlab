@@ -51,7 +51,7 @@ const EXCLUDED: &[&str] = &[
     "computer-use",
 ];
 
-/// Port filtra i `score()` z prototypu (`loadModels`).
+/// Filtr i ranking z prototypu (`loadModels`), z poprawką: stabilne przed „preview”.
 pub fn filter_and_rank(names: Vec<String>) -> Vec<String> {
     let mut list: Vec<String> = names
         .into_iter()
@@ -82,8 +82,10 @@ fn score(n: &str) -> f64 {
         })
         .and_then(|v| v.trim_end_matches('.').parse::<f64>().ok())
         .unwrap_or(0.0);
+    // Modele „preview/exp” bywają przeciążone lub bez przydziału w darmowym planie,
+    // więc wszystkie stabilne idą przed nimi (domyślnie wybierany jest pierwszy z listy).
     let preview = if n.contains("preview") || n.contains("exp") {
-        5.0
+        10_000.0
     } else {
         0.0
     };
@@ -423,5 +425,24 @@ mod tests {
     fn preview_ranks_below_stable_same_version() {
         let r = filter_and_rank(v(&["gemini-2.5-pro-preview-05-06", "gemini-2.5-pro"]));
         assert_eq!(r[0], "gemini-2.5-pro");
+    }
+
+    #[test]
+    fn stable_models_come_before_any_preview() {
+        let r = filter_and_rank(v(&[
+            "gemini-3.1-pro-preview",
+            "gemini-2.5-flash",
+            "gemini-2.5-pro",
+            "gemini-3.0-flash-preview",
+        ]));
+        assert_eq!(
+            r,
+            v(&[
+                "gemini-2.5-pro",
+                "gemini-2.5-flash",
+                "gemini-3.1-pro-preview",
+                "gemini-3.0-flash-preview",
+            ])
+        );
     }
 }
