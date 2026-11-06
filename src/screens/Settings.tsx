@@ -114,7 +114,7 @@ export function Settings() {
           pośredniego.
         </p>
       </div>
-      <div className="grid-2">
+      <div className="grid-2 eq">
         <div className="panel">
           <h2>Gemini — odsłuch i research</h2>
           <KeyField

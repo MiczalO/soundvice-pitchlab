@@ -14,6 +14,7 @@ function emit(event: string, payload: unknown) {
 }
 const later = (ms: number, fn: () => void) => setTimeout(fn, ms);
 
+const query = new URLSearchParams(location.search);
 const NOW = Date.now();
 const DAY = 86_400_000;
 
@@ -38,6 +39,8 @@ const settings: Record<string, string> = {
     "gemini-2.5-pro": "retired",
   }),
 };
+
+if (query.get("wizard") === "1") delete settings.onboarded;
 
 const analysis = {
   primary_genre: "Hip-Hop / Rap",
@@ -218,7 +221,7 @@ const peaks = Array.from(
 
 const commands: Record<string, (a: Record<string, unknown>) => unknown> = {
   app_version: () => "0.1.0-dev",
-  has_secret: () => true,
+  has_secret: () => !(query.get("wizard") === "1" && query.get("nokey") === "1"),
   set_secret: () => null,
   delete_secret: () => null,
   get_settings: () => ({ ...settings }),

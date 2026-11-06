@@ -1342,3 +1342,13 @@ table.hist tbody tr:focus-visible {
   font-size: 14px;
   white-space: nowrap;
 }
+
+/* ekrany z dwoma równorzędnymi panelami (Zasady, Ustawienia) */
+.grid-2.eq {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+@media (max-width: 1000px) {
+  .grid-2.eq {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

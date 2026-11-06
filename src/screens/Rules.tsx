@@ -47,7 +47,7 @@ function RulesForm({ state, reload }: { state: RulesState; reload: () => void })
   };
 
   return (
-    <div className="grid-2">
+    <div className="grid-2 eq">
       <div className="panel">
         <div className="field">
           <label htmlFor="rulesTxt">Zasady</label>
