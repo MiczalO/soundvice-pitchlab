@@ -47,7 +47,7 @@ Opcjonalnie: klucz **Anthropic (Claude)**, jeśli chcesz, żeby to Claude pisał
 ## Jak pracować
 
 - **Analiza i pitch:** upuść plik audio (MP3, WAV, FLAC, M4A, OGG, AIFF), podaj artystę, tytuł, feat./producenta
-  (np. `feat. Gedz; prod. Jakub Gendźwiłł`), kontekst kampanii i ewentualnie tekst. Kliknij **Analizuj**.
+  (np. `feat. XXX; prod. XXXX`), kontekst kampanii i ewentualnie tekst. Kliknij **Analizuj**.
 - **Dowód odsłuchu:** w analizie zobaczysz dosłowny początek tekstu, który model usłyszał, oraz ile dźwięku przetworzył.
 - **Artyści:** pigułka, notatki managera (najwyższy priorytet), wskazówki do researchu, propozycje z różnicami
   (zastąp / dopisz / odrzuć) i historia pigułki z przywracaniem.
