@@ -43,7 +43,7 @@ function KeyField(props: {
           id={id}
           type="password"
           autoComplete="off"
-          style={{ flex: "1 1 240px" }}
+          style={{ flex: "1 1 150px" }}
           placeholder={props.saved ? "•••••••• zapisany w sejfie" : props.placeholder}
           value={value}
           onChange={(e) => setValue(e.target.value)}

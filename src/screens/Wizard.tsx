@@ -88,101 +88,103 @@ export function Wizard() {
   const working = models.filter((m) => status[m] === "ok").length;
 
   return (
-    <main className="wrap" style={{ maxWidth: 640, paddingTop: 48 }}>
-      <Brand />
-      <section className="view">
-        <div className="view-head">
-          <div className="eyebrow">Pierwsze uruchomienie</div>
-          <h1>Połącz Gemini</h1>
-          <p className="lede">
-            pitchLAB korzysta z Twojego własnego klucza API Google. Klucz trafia do sejfu
-            systemowego i nigdy nie jest zapisywany w bazie ani w plikach.
-          </p>
-        </div>
-        {step === 1 ? (
-          <div className="panel">
-            <div className="field">
-              <label htmlFor="wKey">Klucz API Gemini</label>
-              <input
-                id="wKey"
-                type="password"
-                autoComplete="off"
-                placeholder="AIza…"
-                value={key}
-                onChange={(e) => setKey(e.target.value)}
-              />
-              <span className="hint">
-                Wygeneruj go w{" "}
-                <a
-                  href="https://aistudio.google.com/apikey"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    openUrl("https://aistudio.google.com/apikey");
-                  }}
-                >
-                  aistudio.google.com/apikey
-                </a>
-                .
-              </span>
-            </div>
-            <div className="framed-warn">
-              Na darmowym planie Gemini Google może wykorzystywać przesłane dane. Przy niewydanych
-              masterach zalecany jest płatny plan.
-            </div>
-            {(err || error) && <div className="err-box">{err || error}</div>}
-            <div className="row">
-              <button
-                className="btn primary big"
-                disabled={busy || loading || !key.trim()}
-                onClick={connect}
-              >
-                {busy || loading ? "Łączę i sprawdzam modele…" : "Połącz i pobierz modele"}
-              </button>
-            </div>
-            {(busy || loading) && (
-              <span className="hint">
-                Sprawdzam, które modele naprawdę odpowiadają dla Twojego klucza (do 30 s).
-              </span>
-            )}
+    <main className="onboard">
+      <div className="onboard-in">
+        <Brand onPage />
+        <section className="view">
+          <div className="view-head">
+            <div className="eyebrow">Pierwsze uruchomienie</div>
+            <h1>Połącz Gemini</h1>
+            <p className="lede">
+              pitchLAB korzysta z Twojego własnego klucza API Google. Klucz trafia do sejfu
+              systemowego i nigdy nie jest zapisywany w bazie ani w plikach.
+            </p>
           </div>
-        ) : (
-          <div className="panel">
-            {loading ? (
-              <p className="hint">
-                Sprawdzam, które modele naprawdę odpowiadają dla Twojego klucza (do 30 s)…
-              </p>
-            ) : (
-              <>
-                {modelSelect("wModel", "gemini_model", "Model do odsłuchu i analizy")}
-                {modelSelect(
-                  "wModelR",
-                  "gemini_model_research",
-                  "Model do researchu (Google Search)",
-                )}
+          {step === 1 ? (
+            <div className="panel">
+              <div className="field">
+                <label htmlFor="wKey">Klucz API Gemini</label>
+                <input
+                  id="wKey"
+                  type="password"
+                  autoComplete="off"
+                  placeholder="AIza…"
+                  value={key}
+                  onChange={(e) => setKey(e.target.value)}
+                />
                 <span className="hint">
-                  {working
-                    ? `Działających modeli: ${working}. Wybrany został pierwszy z nich.`
-                    : "Żaden model nie odpowiedział poprawnie — spróbuj ponownie za chwilę."}
+                  Wygeneruj go w{" "}
+                  <a
+                    href="https://aistudio.google.com/apikey"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      openUrl("https://aistudio.google.com/apikey");
+                    }}
+                  >
+                    aistudio.google.com/apikey
+                  </a>
+                  .
                 </span>
-              </>
-            )}
-            {(err || error) && <div className="err-box">{err || error}</div>}
-            <div className="row">
-              <button className="btn primary big" disabled={busy || loading} onClick={finish}>
-                {busy ? "Sprawdzam…" : "Sprawdź i zacznij"}
-              </button>
-              <button className="btn" disabled={busy || loading} onClick={() => load(true)}>
-                Sprawdź modele ponownie
-              </button>
-              {limited && (
-                <button className="btn" disabled={busy || loading} onClick={startAnyway}>
-                  Zacznij mimo to
+              </div>
+              <div className="framed-warn">
+                Na darmowym planie Gemini Google może wykorzystywać przesłane dane. Przy niewydanych
+                masterach zalecany jest płatny plan.
+              </div>
+              {(err || error) && <div className="err-box">{err || error}</div>}
+              <div className="row">
+                <button
+                  className="btn primary big"
+                  disabled={busy || loading || !key.trim()}
+                  onClick={connect}
+                >
+                  {busy || loading ? "Łączę i sprawdzam modele…" : "Połącz i pobierz modele"}
                 </button>
+              </div>
+              {(busy || loading) && (
+                <span className="hint">
+                  Sprawdzam, które modele naprawdę odpowiadają dla Twojego klucza (do 30 s).
+                </span>
               )}
             </div>
-          </div>
-        )}
-      </section>
+          ) : (
+            <div className="panel">
+              {loading ? (
+                <p className="hint">
+                  Sprawdzam, które modele naprawdę odpowiadają dla Twojego klucza (do 30 s)…
+                </p>
+              ) : (
+                <>
+                  {modelSelect("wModel", "gemini_model", "Model do odsłuchu i analizy")}
+                  {modelSelect(
+                    "wModelR",
+                    "gemini_model_research",
+                    "Model do researchu (Google Search)",
+                  )}
+                  <span className="hint">
+                    {working
+                      ? `Działających modeli: ${working}. Wybrany został pierwszy z nich.`
+                      : "Żaden model nie odpowiedział poprawnie — spróbuj ponownie za chwilę."}
+                  </span>
+                </>
+              )}
+              {(err || error) && <div className="err-box">{err || error}</div>}
+              <div className="row">
+                <button className="btn primary big" disabled={busy || loading} onClick={finish}>
+                  {busy ? "Sprawdzam…" : "Sprawdź i zacznij"}
+                </button>
+                <button className="btn" disabled={busy || loading} onClick={() => load(true)}>
+                  Sprawdź modele ponownie
+                </button>
+                {limited && (
+                  <button className="btn" disabled={busy || loading} onClick={startAnyway}>
+                    Zacznij mimo to
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </section>
+      </div>
     </main>
   );
 }

@@ -1,0 +1,21 @@
+// Fonty dołączone lokalnie (bez Google Fonts w runtime). „latin-ext” zawiera polskie znaki.
+import "@fontsource/manrope/latin-400.css";
+import "@fontsource/manrope/latin-ext-400.css";
+import "@fontsource/manrope/latin-500.css";
+import "@fontsource/manrope/latin-ext-500.css";
+import "@fontsource/manrope/latin-600.css";
+import "@fontsource/manrope/latin-ext-600.css";
+import "@fontsource/manrope/latin-700.css";
+import "@fontsource/manrope/latin-ext-700.css";
+import "@fontsource/manrope/latin-800.css";
+import "@fontsource/manrope/latin-ext-800.css";
+import "@fontsource/unbounded/latin-600.css";
+import "@fontsource/unbounded/latin-ext-600.css";
+import "@fontsource/unbounded/latin-700.css";
+import "@fontsource/unbounded/latin-ext-700.css";
+import "@fontsource/jetbrains-mono/latin-400.css";
+import "@fontsource/jetbrains-mono/latin-ext-400.css";
+import "@fontsource/jetbrains-mono/latin-500.css";
+import "@fontsource/jetbrains-mono/latin-ext-500.css";
+import "@fontsource/jetbrains-mono/latin-600.css";
+import "@fontsource/jetbrains-mono/latin-ext-600.css";
