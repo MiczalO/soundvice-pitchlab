@@ -37,6 +37,7 @@ pub fn run() {
             commands::prepare_audio,
             commands::start_analysis,
             commands::start_research,
+            commands::start_pill_from_dossier,
             commands::list_artists,
             commands::get_artist,
             commands::create_artist,

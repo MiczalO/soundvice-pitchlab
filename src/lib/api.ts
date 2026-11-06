@@ -72,6 +72,8 @@ export const api = {
   rejectProposal: (proposalId: number) => invoke<void>("reject_proposal", { proposalId }),
   restorePill: (historyId: number) => invoke<void>("restore_pill", { historyId }),
   startResearch: (artistId: number) => invoke<number>("start_research", { artistId }),
+  startPillFromDossier: (artistId: number, dossier: string) =>
+    invoke<number>("start_pill_from_dossier", { artistId, dossier }),
   cancelJob: (jobId: number) => invoke<void>("cancel_job", { jobId }),
   getTrack: (trackId: number) => invoke<TrackView | null>("get_track", { trackId }),
 };

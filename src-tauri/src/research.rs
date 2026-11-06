@@ -129,6 +129,34 @@ pub async fn run(
         Some(format!("{} źródeł{queries}", r.sources.len())),
     );
 
+    summarize(
+        app,
+        job_id,
+        cancel,
+        artist_id,
+        &name,
+        &old_pill,
+        r.text,
+        r.sources,
+        &pill_models,
+    )
+    .await
+}
+
+/// Pigułka z gotowego dossier (z researchu albo wklejonego przez managera) + zapis do bazy:
+/// nowa pigułka tylko gdy artysta jej nie miał, inaczej propozycja do porównania.
+#[allow(clippy::too_many_arguments)]
+async fn summarize(
+    app: &AppHandle,
+    job_id: u64,
+    cancel: &CancellationToken,
+    artist_id: i64,
+    name: &str,
+    old_pill: &str,
+    dossier: String,
+    sources: Vec<gemini::Source>,
+    pill_models: &[String],
+) -> AppResult<Applied> {
     emit_step(
         app,
         job_id,
@@ -138,10 +166,10 @@ pub async fn run(
     );
     let progress_p =
         |m: &str| emit_step(app, job_id, "pill", StepState::Active, Some(m.to_string()));
-    let pill_parts = [Part::Text(prompts::pill(&name, &r.text, &old_pill))];
+    let pill_parts = [Part::Text(prompts::pill(name, &dossier, old_pill))];
     let pill_parts_ref = &pill_parts;
     let pill = match resilient::run(
-        &pill_models,
+        pill_models,
         cancel,
         resilient::MAX_TOTAL,
         resilient::backoff,
@@ -183,8 +211,8 @@ pub async fn run(
             artist_id,
             &ResearchResult {
                 pill,
-                dossier: r.text,
-                sources: r.sources,
+                dossier,
+                sources,
             },
         )?
     };
@@ -196,4 +224,51 @@ pub async fn run(
     };
     emit_step(app, job_id, "pill", StepState::Done, Some(msg.into()));
     Ok(applied)
+}
+
+/// Pigułka z własnego researchu wklejonego przez managera (gdy wyszukiwarka Google
+/// w Gemini jest niedostępna). Nic nie jest zmyślane: model tylko streszcza podany tekst.
+pub async fn from_dossier(
+    app: &AppHandle,
+    job_id: u64,
+    cancel: &CancellationToken,
+    artist_id: i64,
+    dossier: String,
+) -> AppResult<Applied> {
+    if dossier.trim().len() < 40 {
+        return Err(AppError::Other(
+            "Wklejony research jest zbyt krótki — wklej cały tekst z researchu.".into(),
+        ));
+    }
+    let (name, old_pill) = {
+        let db = app.state::<Db>();
+        let conn = db.0.lock().map_err(|_| db_err())?;
+        let d = artists::detail(&conn, artist_id)?
+            .ok_or_else(|| AppError::Other("Nie ma takiego artysty.".into()))?;
+        (d.name, d.pill)
+    };
+    let pill_models = {
+        let db = app.state::<Db>();
+        let conn = db.0.lock().map_err(|_| db_err())?;
+        settings::model_candidates(&conn, "gemini_model")
+    };
+    emit_step(
+        app,
+        job_id,
+        "research",
+        StepState::Done,
+        Some("własny research wklejony przez Ciebie".into()),
+    );
+    summarize(
+        app,
+        job_id,
+        cancel,
+        artist_id,
+        &name,
+        &old_pill,
+        dossier,
+        Vec::new(),
+        &pill_models,
+    )
+    .await
 }

@@ -289,7 +289,26 @@ pub async fn run(
     } else {
         let ctx = (p.title.clone(), saved.genre);
         if let Err(e) = research::run(app, job_id, cancel, saved.artist_id, Some(ctx)).await {
-            return (track_id, Err(e));
+            // Brak przydziału na wyszukiwarkę Google to nie błąd analizy: utwór jest zapisany,
+            // a pigułkę można wpisać ręcznie albo utworzyć z wklejonego researchu.
+            if matches!(e, AppError::RateLimited(..)) {
+                emit_step(
+                    app,
+                    job_id,
+                    "research",
+                    StepState::Skip,
+                    Some("wyszukiwarka Google niedostępna w Twoim planie".into()),
+                );
+                emit_step(
+                    app,
+                    job_id,
+                    "pill",
+                    StepState::Skip,
+                    Some("wpisz pigułkę ręcznie lub wklej własny research w karcie Artyści".into()),
+                );
+            } else {
+                return (track_id, Err(e));
+            }
         }
     }
     emit_step(

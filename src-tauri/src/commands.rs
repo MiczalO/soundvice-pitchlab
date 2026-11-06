@@ -205,6 +205,26 @@ pub fn start_research(
     job_id
 }
 
+/// Pigułka z własnego researchu wklejonego przez managera (bez wyszukiwarki Google).
+#[tauri::command]
+pub fn start_pill_from_dossier(
+    app: tauri::AppHandle,
+    jobs: State<crate::jobs::Jobs>,
+    artist_id: i64,
+    dossier: String,
+) -> u64 {
+    let (job_id, cancel) = jobs.start();
+    tauri::async_runtime::spawn(async move {
+        use tauri::Manager;
+        let res = crate::research::from_dossier(&app, job_id, &cancel, artist_id, dossier)
+            .await
+            .map(|_| ());
+        app.state::<crate::jobs::Jobs>().finish(job_id);
+        crate::jobs::emit_done(&app, done_event(job_id, None, res));
+    });
+    job_id
+}
+
 // ---------- artyści ----------
 
 fn lock<'a>(db: &'a State<'_, Db>) -> AppResult<std::sync::MutexGuard<'a, rusqlite::Connection>> {

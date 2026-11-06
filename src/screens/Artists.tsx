@@ -58,6 +58,7 @@ function Editor({ detail: a, reload, onDeleted }: EditorProps) {
   const [notes, setNotes] = useState(a.manager_notes);
   const [hints, setHints] = useState(a.research_hints);
   const [confirmDel, setConfirmDel] = useState(false);
+  const [pasted, setPasted] = useState("");
   const [running, setRunning] = useState(false);
   const [jobId, setJobId] = useState<number | null>(null);
   const [steps, setSteps] = useState<StepMap | null>(null);
@@ -101,7 +102,7 @@ function Editor({ detail: a, reload, onDeleted }: EditorProps) {
     }
   };
 
-  const research = async () => {
+  const runJob = async (start: () => Promise<number>): Promise<boolean> => {
     setError(null);
     setSteps({});
     try {
@@ -109,13 +110,19 @@ function Editor({ detail: a, reload, onDeleted }: EditorProps) {
       await api.updateArtist({ id: a.id, pill, managerNotes: notes, researchHints: hints });
       runningRef.current = true;
       setRunning(true);
-      setJobId(await api.startResearch(a.id));
+      setJobId(await start());
+      return true;
     } catch (e) {
       runningRef.current = false;
       setRunning(false);
       setError(toAppError(e).message);
+      return false;
     }
   };
+
+  const research = () => runJob(() => api.startResearch(a.id));
+  const fromPasted = () =>
+    runJob(() => api.startPillFromDossier(a.id, pasted)).then((ok) => ok && setPasted(""));
 
   const act = async (fn: () => Promise<void>, ok: string) => {
     try {
@@ -259,6 +266,34 @@ function Editor({ detail: a, reload, onDeleted }: EditorProps) {
           Zapisano: {fmtDateTime(a.updated_at)} · research: {fmtDateTime(a.researched_at)}
         </span>
       </div>
+
+      <details open={!a.pill.trim()}>
+        <summary>Wklej własny research (gdy wyszukiwarka Google jest niedostępna)</summary>
+        <div className="field" style={{ marginTop: 10 }}>
+          <label htmlFor="aPasted">Tekst researchu</label>
+          <textarea
+            id="aPasted"
+            className="mono"
+            style={{ minHeight: 160 }}
+            placeholder="Wklej tu research o artyście zrobiony gdzie indziej (np. w przeglądarce z wyszukiwarką). Model tylko streści go do pigułki — nic nie doda od siebie."
+            value={pasted}
+            onChange={(e) => setPasted(e.target.value)}
+          />
+          <span className="hint">
+            Jeśli artysta ma już pigułkę, wynik trafi jako propozycja do porównania — Twoja pigułka
+            się nie zmieni.
+          </span>
+        </div>
+        <div className="row" style={{ marginTop: 8 }}>
+          <button
+            className="btn"
+            disabled={running || pasted.trim().length < 40}
+            onClick={fromPasted}
+          >
+            Utwórz pigułkę z wklejonego tekstu
+          </button>
+        </div>
+      </details>
 
       {a.sources.length > 0 && (
         <details>
