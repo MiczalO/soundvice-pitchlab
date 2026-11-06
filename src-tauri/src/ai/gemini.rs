@@ -134,7 +134,12 @@ pub struct Generated {
     pub text: String,
     pub sources: Vec<Source>,
     pub queries: Vec<String>,
+    /// Tokeny audio w zapytaniu (z `usageMetadata`) — dowód, że dźwięk dotarł do modelu.
+    pub audio_tokens: Option<u64>,
 }
+
+/// Gemini liczy 1 s dźwięku jako 32 tokeny; stąd przybliżony czas przetworzonego audio.
+pub const AUDIO_TOKENS_PER_SECOND: f64 = 32.0;
 
 /// Przerywa przyszłość po anulowaniu joba.
 pub async fn cancellable<T>(
@@ -230,10 +235,15 @@ pub fn parse_generated(data: &Value) -> AppResult<Generated> {
                 .collect()
         })
         .unwrap_or_default();
+    let audio_tokens = data["usageMetadata"]["promptTokensDetails"]
+        .as_array()
+        .and_then(|d| d.iter().find(|x| x["modality"] == "AUDIO"))
+        .and_then(|x| x["tokenCount"].as_u64());
     Ok(Generated {
         text,
         sources,
         queries,
+        audio_tokens,
     })
 }
 
@@ -456,6 +466,16 @@ mod tests {
         assert_eq!(g.sources.len(), 2);
         assert_eq!(g.sources[1].title, "https://b.pl");
         assert_eq!(g.queries, vec!["q1"]);
+    }
+
+    #[test]
+    fn reads_audio_tokens_from_usage_metadata() {
+        let d = json!({"candidates":[{"content":{"parts":[{"text":"x"}]}}],
+            "usageMetadata":{"promptTokenCount":5000,"promptTokensDetails":[
+                {"modality":"TEXT","tokenCount":700},{"modality":"AUDIO","tokenCount":4608}]}});
+        assert_eq!(parse_generated(&d).unwrap().audio_tokens, Some(4608));
+        let no_audio = json!({"candidates":[{"content":{"parts":[{"text":"x"}]}}]});
+        assert_eq!(parse_generated(&no_audio).unwrap().audio_tokens, None);
     }
 
     #[test]

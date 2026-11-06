@@ -188,7 +188,12 @@ async fn listen_and_save(
             )
             .await?;
             let value = json::parse_loose(&g.text)?;
-            analysis::validate(value)
+            let mut a = analysis::validate(value)?;
+            // Dowód odsłuchu: ile dźwięku faktycznie przetworzył model (z tokenów audio).
+            a.heard_audio_s = g
+                .audio_tokens
+                .map(|t| t as f64 / gemini::AUDIO_TOKENS_PER_SECOND);
+            Ok(a)
         },
     )
     .await;

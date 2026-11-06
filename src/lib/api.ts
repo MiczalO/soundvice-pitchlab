@@ -132,6 +132,11 @@ export interface Analysis {
   sound_alikes: string[];
   explicit_content: boolean | null;
   editorial_angle: string;
+  /** Dosłowny początek tekstu usłyszany przez model (do sprawdzenia przez managera). */
+  opening_lines?: string;
+  first_vocal_at?: string;
+  /** Przybliżona długość przetworzonego dźwięku (z tokenów audio). */
+  heard_audio_s?: number | null;
 }
 
 export interface TrackView {

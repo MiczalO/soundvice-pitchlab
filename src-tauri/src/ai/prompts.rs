@@ -48,7 +48,9 @@ Zwróć wyłącznie JSON:
  "standout_moments": [{{"t":"0:00","desc":"string"}}],
  "sound_alikes": ["artysta — utwór (dla orientacji, nie do pitchu)"],
  "explicit_content": true|false,
- "editorial_angle": "1 zdanie: co w tym numerze jest najciekawsze z perspektywy redaktora playlist"
+ "editorial_angle": "1 zdanie: co w tym numerze jest najciekawsze z perspektywy redaktora playlist",
+ "opening_lines": "dosłowny zapis pierwszych 1-2 linijek tekstu dokładnie tak, jak je słyszysz (pusty napis, jeśli nie ma wokalu lub nie rozumiesz słów — nie zgaduj)",
+ "first_vocal_at": "m:ss — kiedy wchodzi pierwszy wokal"
 }}"#,
         artist = t.artist,
     )
@@ -349,6 +351,8 @@ mod tests {
         assert!(p.contains("Tekst / opis od managera:\ntekst"));
         assert!(p.contains(r#""primary_genre": "string""#));
         assert!(p.contains(r#""structure": [{"t":"0:00","section":"intro"}]"#));
+        assert!(p.contains("\"opening_lines\":"));
+        assert!(p.contains("\"first_vocal_at\":"));
     }
 
     #[test]

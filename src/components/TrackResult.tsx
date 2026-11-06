@@ -236,7 +236,7 @@ export function TrackResult({
       {track.analysis && (
         <details>
           <summary>Analiza odsłuchu</summary>
-          <AnalysisView an={track.analysis} />
+          <AnalysisView an={track.analysis} fileSeconds={track.duration_s} />
         </details>
       )}
 

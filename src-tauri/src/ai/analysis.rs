@@ -28,6 +28,19 @@ pub struct Analysis {
     pub sound_alikes: Vec<String>,
     pub explicit_content: Option<bool>,
     pub editorial_angle: String,
+    /// Dosłowny początek tekstu, który model faktycznie słyszy — do sprawdzenia przez managera.
+    #[serde(deserialize_with = "null_as_empty")]
+    pub opening_lines: String,
+    /// Czas pierwszego wokalu (m:ss).
+    #[serde(deserialize_with = "null_as_empty")]
+    pub first_vocal_at: String,
+    /// Przybliżona długość dźwięku przetworzonego przez model (z liczby tokenów audio).
+    /// Wypełnia aplikacja, nie model.
+    pub heard_audio_s: Option<f64>,
+}
+
+fn null_as_empty<'de, D: Deserializer<'de>>(d: D) -> Result<String, D::Error> {
+    Ok(Option::<String>::deserialize(d)?.unwrap_or_default())
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -108,6 +121,19 @@ mod tests {
         assert_eq!(a.energy, Some(7.0));
         assert_eq!(a.vocals.kind, "rap");
         assert_eq!(a.structure[0].section, "intro");
+    }
+
+    #[test]
+    fn proof_fields_are_optional_and_null_safe() {
+        let a =
+            validate(json!({"primary_genre":"pop","opening_lines":null,"first_vocal_at":"0:07"}))
+                .unwrap();
+        assert_eq!(a.opening_lines, "");
+        assert_eq!(a.first_vocal_at, "0:07");
+        assert_eq!(a.heard_audio_s, None);
+        let b = validate(json!({"primary_genre":"pop","opening_lines":"Tak to się robi teraz"}))
+            .unwrap();
+        assert_eq!(b.opening_lines, "Tak to się robi teraz");
     }
 
     #[test]
