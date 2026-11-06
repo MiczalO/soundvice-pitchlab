@@ -9,7 +9,7 @@ use tauri::{AppHandle, Manager};
 use tokio_util::sync::CancellationToken;
 
 use crate::ai::gemini::{self, GenOpts, Part};
-use crate::ai::{analysis, json, prompts};
+use crate::ai::{analysis, json, prompts, resilient};
 use crate::db::{Db, repo};
 use crate::error::{AppError, AppResult};
 use crate::jobs::{StepState, emit_step};
@@ -120,13 +120,11 @@ async fn listen_and_save(
     if p.artist.trim().is_empty() {
         return Err(AppError::Other("Wpisz artystę.".into()));
     }
-    let model = {
+    let candidates = {
         let db = app.state::<Db>();
         let conn = db.0.lock().map_err(|_| db_err())?;
-        settings::get(&conn, "gemini_model")
-    }
-    .filter(|m| !m.is_empty())
-    .unwrap_or_else(|| gemini::FALLBACK_MODEL.to_string());
+        settings::model_candidates(&conn, "gemini_model")
+    };
 
     emit_step(app, job_id, "audio", StepState::Active, None);
     let part = match audio_part(app, job_id, p, cancel).await {
@@ -157,25 +155,44 @@ async fn listen_and_save(
         featuring: &p.featuring,
         lyrics: &p.lyrics,
     });
-    let result = async {
-        let g = gemini::generate(
-            &model,
-            &[part, Part::Text(prompt)],
-            GenOpts {
-                json: true,
-                search: false,
-                temperature: 0.2,
-            },
-            cancel,
+    let parts = [part, Part::Text(prompt)];
+    let parts_ref = &parts;
+    let progress = |m: &str| {
+        emit_step(
+            app,
+            job_id,
+            "listen",
+            StepState::Active,
+            Some(m.to_string()),
         )
-        .await?;
-        let value = json::parse_loose(&g.text)?;
-        let parsed = analysis::validate(value)?;
-        Ok::<_, AppError>(parsed)
-    }
+    };
+    // Przy przeciążeniu próbujemy do skutku (też na zapasowych modelach); odpowiedź,
+    // której nie da się odczytać jako analiza, liczy się jak błąd przejściowy modelu.
+    let result = resilient::run(
+        &candidates,
+        cancel,
+        resilient::MAX_TOTAL,
+        resilient::backoff,
+        &progress,
+        |m| async move {
+            let g = gemini::generate(
+                &m,
+                parts_ref,
+                GenOpts {
+                    json: true,
+                    search: false,
+                    temperature: 0.2,
+                },
+                cancel,
+            )
+            .await?;
+            let value = json::parse_loose(&g.text)?;
+            analysis::validate(value)
+        },
+    )
     .await;
-    let parsed = match result {
-        Ok(a) => a,
+    let (parsed, model) = match result {
+        Ok(ok) => ok,
         Err(e) => {
             emit_step(app, job_id, "listen", StepState::Err, None);
             return Err(e);
@@ -190,6 +207,11 @@ async fn listen_and_save(
     .flatten()
     .collect::<Vec<_>>()
     .join(" · ");
+    let summary = if candidates.first() == Some(&model) {
+        summary
+    } else {
+        format!("{summary} · model: {model}")
+    };
     emit_step(app, job_id, "listen", StepState::Done, Some(summary));
 
     let (track_id, artist_id) = {

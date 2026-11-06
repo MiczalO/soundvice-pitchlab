@@ -49,6 +49,30 @@ pub fn set(conn: &Connection, key: &str, value: &str) -> AppResult<()> {
     Ok(())
 }
 
+/// Pula modeli do odpornych wywołań: wybrany model pierwszy, potem pozostałe działające
+/// (status `ok`), na końcu chwilowo przeciążone — w kolejności rankingu z listy modeli.
+pub fn model_candidates(conn: &Connection, primary_key: &str) -> Vec<String> {
+    let primary = get(conn, primary_key)
+        .filter(|m| !m.is_empty())
+        .or_else(|| get(conn, "gemini_model").filter(|m| !m.is_empty()))
+        .unwrap_or_else(|| crate::ai::gemini::FALLBACK_MODEL.to_string());
+    let list: Vec<String> = get(conn, "gemini_models_cache")
+        .and_then(|j| serde_json::from_str(&j).ok())
+        .unwrap_or_default();
+    let status: HashMap<String, String> = get(conn, "gemini_model_status")
+        .and_then(|j| serde_json::from_str(&j).ok())
+        .unwrap_or_default();
+    let mut out = vec![primary];
+    for wanted in [&["ok"][..], &["overloaded", "timeout"][..]] {
+        for m in &list {
+            if !out.contains(m) && status.get(m).is_some_and(|s| wanted.contains(&s.as_str())) {
+                out.push(m.clone());
+            }
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -68,6 +92,31 @@ mod tests {
         assert_eq!(
             get_all(&c).unwrap().get("pitch_lang").map(String::as_str),
             Some("en")
+        );
+    }
+
+    #[test]
+    fn candidates_put_selected_first_then_working_then_overloaded() {
+        let c = mem();
+        set(&c, "gemini_model", "b").unwrap();
+        set(&c, "gemini_models_cache", r#"["a","b","c","d","e"]"#).unwrap();
+        set(
+            &c,
+            "gemini_model_status",
+            r#"{"a":"quota","b":"ok","c":"overloaded","d":"ok","e":"retired"}"#,
+        )
+        .unwrap();
+        assert_eq!(model_candidates(&c, "gemini_model"), vec!["b", "d", "c"]);
+        // brak osobnego modelu do researchu → bierze główny
+        assert_eq!(model_candidates(&c, "gemini_model_research")[0], "b");
+    }
+
+    #[test]
+    fn candidates_without_any_settings_use_fallback() {
+        let c = mem();
+        assert_eq!(
+            model_candidates(&c, "gemini_model"),
+            vec![crate::ai::gemini::FALLBACK_MODEL]
         );
     }
 
