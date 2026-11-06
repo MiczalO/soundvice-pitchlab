@@ -141,3 +141,13 @@ base64 -i certyfikat.p12 | pbcopy
 - **`tauri::generate_context!` nie widzi `dist`:** najpierw `npm run build` (CI robi to przed Rustem).
 - **Ostrzeżenie `Failed to load a font face ... malformed font`** podczas `tauri icon` pochodzi z czcionek systemowych
   i jest nieszkodliwe.
+
+## Aktualizacje na macOS
+
+Do automatycznej aktualizacji na macOS Tauri potrzebuje archiwum `.app.tar.gz` z podpisem, które powstaje z pakietu `.app`.
+Dlatego w `bundle.targets` jest oprócz `dmg` także `app`. Po wydaniu sprawdź, że `latest.json` zawiera platformy
+`darwin-aarch64` i `darwin-x86_64` (obok `windows-x86_64`):
+
+```bash
+gh release download vX.Y.Z --pattern latest.json --dir . && cat latest.json
+```

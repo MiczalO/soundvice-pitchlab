@@ -34,7 +34,8 @@
     "targets": [
       "nsis",
       "msi",
-      "dmg"
+      "dmg",
+      "app"
     ],
     "createUpdaterArtifacts": false,
     "publisher": "Repitch",
