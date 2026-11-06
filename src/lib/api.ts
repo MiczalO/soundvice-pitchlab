@@ -84,6 +84,22 @@ export const api = {
     invoke<number>("save_pitch_edit", { trackId, text }),
   restorePitch: (pitchId: number) => invoke<void>("restore_pitch", { pitchId }),
   addToExamples: (text: string) => invoke<void>("add_to_examples", { text }),
+  listHistory: (f: { artistId?: number | null; query: string; newestFirst: boolean }) =>
+    invoke<HistoryRow[]>("list_history", {
+      artistId: f.artistId ?? null,
+      query: f.query,
+      newestFirst: f.newestFirst,
+    }),
+  getRules: () => invoke<RulesState>("get_rules"),
+  saveRules: (kind: "rules" | "examples", body: string) =>
+    invoke<boolean>("save_rules", { kind, body }),
+  restoreRuleVersion: (versionId: number) => invoke<void>("restore_rule_version", { versionId }),
+  resetDefaultRules: () => invoke<void>("reset_default_rules"),
+  importHtmlJson: (path: string) => invoke<ImportReport>("import_html_json", { path }),
+  exportBackup: (path: string, includeAudio: boolean) =>
+    invoke<ExportInfo>("export_backup", { path, includeAudio }),
+  restoreBackup: (path: string) => invoke<void>("restore_backup", { path }),
+  getDataDir: () => invoke<string>("get_data_dir"),
   cancelJob: (jobId: number) => invoke<void>("cancel_job", { jobId }),
   getTrack: (trackId: number) => invoke<TrackView | null>("get_track", { trackId }),
 };
@@ -233,4 +249,45 @@ export interface PitchView {
   is_manual_edit: boolean;
   is_current: boolean;
   created_at: number;
+}
+
+export interface HistoryRow {
+  track_id: number;
+  title: string;
+  artist_id: number;
+  artist_name: string;
+  release_date: string | null;
+  genre: string | null;
+  chars: number | null;
+  created_at: number;
+}
+export interface RuleVersion {
+  id: number;
+  version: number;
+  body: string;
+  created_at: number;
+}
+export interface RulesState {
+  rules: string;
+  examples: string;
+  lang: string;
+  default_rules: string;
+  rules_versions: RuleVersion[];
+  examples_versions: RuleVersion[];
+}
+export interface ImportReport {
+  artists_new: number;
+  artists_merged: number;
+  tracks: number;
+  tracks_skipped: number;
+  pitches: number;
+  proposals: number;
+  rules_updated: boolean;
+  examples_updated: boolean;
+  lang_set: boolean;
+}
+export interface ExportInfo {
+  path: string;
+  audio_files: number;
+  size: number;
 }

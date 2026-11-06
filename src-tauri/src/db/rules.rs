@@ -39,6 +39,54 @@ pub fn append_example(conn: &Connection, text: &str) -> AppResult<()> {
     save(conn, "examples", &body)
 }
 
+#[derive(serde::Serialize)]
+pub struct RuleVersion {
+    pub id: i64,
+    pub version: i64,
+    pub body: String,
+    pub created_at: i64,
+}
+
+/// Historia wersji (najnowsze pierwsze).
+pub fn versions(conn: &Connection, kind: &str) -> AppResult<Vec<RuleVersion>> {
+    let mut st = conn.prepare(
+        "SELECT id, version, body, created_at FROM rules WHERE kind=?1 ORDER BY version DESC",
+    )?;
+    let rows = st
+        .query_map([kind], |r| {
+            Ok(RuleVersion {
+                id: r.get(0)?,
+                version: r.get(1)?,
+                body: r.get(2)?,
+                created_at: r.get(3)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+/// Zapis z formularza: nowa wersja tylko wtedy, gdy treść się zmieniła.
+pub fn save_if_changed(conn: &Connection, kind: &str, body: &str) -> AppResult<bool> {
+    if current(conn, kind) == body {
+        return Ok(false);
+    }
+    save(conn, kind, body)?;
+    Ok(true)
+}
+
+/// Przywraca starszą wersję jako nową aktualną (historia nie jest kasowana).
+pub fn restore(conn: &Connection, version_id: i64) -> AppResult<()> {
+    let (kind, body): (String, String) = conn
+        .query_row(
+            "SELECT kind, body FROM rules WHERE id=?1",
+            [version_id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .map_err(|_| crate::error::AppError::Other("Nie ma takiej wersji.".into()))?;
+    save_if_changed(conn, &kind, &body)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -61,6 +109,24 @@ mod tests {
             })
             .unwrap();
         assert_eq!(n, 2); // stara wersja zachowana
+    }
+
+    #[test]
+    fn save_if_changed_restore_and_versions() {
+        let c = mem();
+        let default = current(&c, "rules");
+        assert!(!save_if_changed(&c, "rules", &default).unwrap());
+        assert!(save_if_changed(&c, "rules", "B").unwrap());
+        assert!(save_if_changed(&c, "rules", "C").unwrap());
+        let v = versions(&c, "rules").unwrap();
+        assert_eq!(
+            v.iter().map(|x| x.body.as_str()).collect::<Vec<_>>(),
+            vec!["C", "B", default.as_str()]
+        );
+        restore(&c, v[2].id).unwrap(); // przywrócenie domyślnych
+        assert_eq!(current(&c, "rules"), default);
+        assert_eq!(versions(&c, "rules").unwrap().len(), 4);
+        assert!(restore(&c, 99999).is_err());
     }
 
     #[test]

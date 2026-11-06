@@ -5,6 +5,7 @@ use rusqlite::Connection;
 use rusqlite_migration::{M, Migrations};
 
 pub mod artists;
+pub mod history;
 pub mod pitches;
 pub mod repo;
 pub mod rules;
@@ -16,10 +17,23 @@ pub const DEFAULT_RULES: &str = include_str!("default_rules.txt");
 /// Poprzednie domyślne wersje zasad (v1 z prototypu, v2 „opis utworu”). Jeśli użytkownik
 /// ich nie zmieniał, przy starcie dostaje obecną domyślną jako kolejną wersję
 /// (stare zostają w historii).
-const OLD_DEFAULT_RULES: [&str; 2] = [
+pub(crate) const OLD_DEFAULT_RULES: [&str; 2] = [
     include_str!("default_rules_v1.txt"),
     include_str!("default_rules_v2.txt"),
 ];
+
+/// Tekst domyślnych zasad z prototypu (v1) — do rozpoznania „nietkniętych” zasad przy imporcie.
+#[cfg(test)]
+pub(crate) const DEFAULT_RULES_V1_TEXT: &str = OLD_DEFAULT_RULES[0];
+
+/// Czy podany tekst zasad to jedna z domyślnych wersji (stara lub obecna).
+pub fn is_default_rules(text: &str) -> bool {
+    let t = text.trim();
+    t == DEFAULT_RULES.trim() || OLD_DEFAULT_RULES.iter().any(|o| o.trim() == t)
+}
+
+/// Liczba migracji = wersja schematu (`PRAGMA user_version`) tej wersji aplikacji.
+pub const SCHEMA_VERSION: u32 = 1;
 
 static MIGRATIONS: LazyLock<Migrations<'static>> =
     LazyLock::new(|| Migrations::new(vec![M::up(include_str!("migrations/0001_init.sql"))]));
@@ -111,6 +125,15 @@ mod tests {
         let mut c = Connection::open_in_memory().unwrap();
         migrate(&mut c).unwrap();
         c
+    }
+
+    #[test]
+    fn schema_version_matches_applied_migrations() {
+        let c = mem();
+        let v: u32 = c
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(v, SCHEMA_VERSION);
     }
 
     #[test]

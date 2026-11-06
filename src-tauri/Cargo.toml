@@ -34,6 +34,7 @@ sha2 = "0.11.1"
 symphonia = { version = "0.6.1", features = ["all"] }
 base64 = "0.23.1"
 tauri-plugin-dialog = "2.8.4"
+zip = { version = "9.4.1", default-features = false, features = ["deflate"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

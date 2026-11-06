@@ -349,3 +349,146 @@ pub fn get_track(db: State<Db>, track_id: i64) -> AppResult<Option<crate::db::re
             .map_err(|_| AppError::Db("blokada bazy".into()))?;
     crate::db::repo::get_track(&conn, track_id)
 }
+
+// ---------- historia, zasady, import, kopia ----------
+
+#[tauri::command]
+pub fn list_history(
+    db: State<Db>,
+    artist_id: Option<i64>,
+    query: String,
+    newest_first: bool,
+) -> AppResult<Vec<crate::db::history::HistoryRow>> {
+    crate::db::history::list(&*lock(&db)?, artist_id, &query, newest_first)
+}
+
+#[derive(Serialize)]
+pub struct RulesState {
+    pub rules: String,
+    pub examples: String,
+    pub lang: String,
+    pub default_rules: &'static str,
+    pub rules_versions: Vec<crate::db::rules::RuleVersion>,
+    pub examples_versions: Vec<crate::db::rules::RuleVersion>,
+}
+
+#[tauri::command]
+pub fn get_rules(db: State<Db>) -> AppResult<RulesState> {
+    use crate::db::rules;
+    let conn = lock(&db)?;
+    Ok(RulesState {
+        rules: rules::current(&conn, "rules"),
+        examples: rules::current(&conn, "examples"),
+        lang: settings::get(&conn, "pitch_lang").unwrap_or_else(|| "en".into()),
+        default_rules: crate::db::DEFAULT_RULES,
+        rules_versions: rules::versions(&conn, "rules")?,
+        examples_versions: rules::versions(&conn, "examples")?,
+    })
+}
+
+/// Zapisuje zasady lub wzorce jako nową wersję (tylko gdy treść się zmieniła).
+#[tauri::command]
+pub fn save_rules(db: State<Db>, kind: String, body: String) -> AppResult<bool> {
+    if kind != "rules" && kind != "examples" {
+        return Err(AppError::Other("Nieznany rodzaj zasad.".into()));
+    }
+    if kind == "rules" && body.trim().is_empty() {
+        return Err(AppError::Other("Zasady nie mogą być puste.".into()));
+    }
+    crate::db::rules::save_if_changed(&*lock(&db)?, &kind, &body)
+}
+
+#[tauri::command]
+pub fn restore_rule_version(db: State<Db>, version_id: i64) -> AppResult<()> {
+    crate::db::rules::restore(&*lock(&db)?, version_id)
+}
+
+/// Przywraca domyślne zasady jako nową wersję (własne zostają w historii).
+#[tauri::command]
+pub fn reset_default_rules(db: State<Db>) -> AppResult<()> {
+    crate::db::rules::save_if_changed(&*lock(&db)?, "rules", crate::db::DEFAULT_RULES).map(|_| ())
+}
+
+/// Import kopii JSON z prototypu HTML.
+#[tauri::command]
+pub async fn import_html_json(
+    app: tauri::AppHandle,
+    path: String,
+) -> AppResult<crate::import::ImportReport> {
+    use tauri::Manager;
+    let text = tauri::async_runtime::spawn_blocking(move || {
+        let meta =
+            std::fs::metadata(&path).map_err(|e| AppError::Other(format!("Błąd pliku: {e}")))?;
+        if meta.len() > 200 * 1024 * 1024 {
+            return Err(AppError::Other(
+                "Plik jest zbyt duży na kopię pitchLAB (limit 200 MB).".into(),
+            ));
+        }
+        std::fs::read_to_string(&path)
+            .map_err(|e| AppError::Other(format!("Błąd odczytu pliku: {e}")))
+    })
+    .await
+    .map_err(|e| AppError::Other(e.to_string()))??;
+    let db = app.state::<Db>();
+    let mut conn =
+        db.0.lock()
+            .map_err(|_| AppError::Db("blokada bazy".into()))?;
+    crate::import::import_json(&mut conn, &text)
+}
+
+#[tauri::command]
+pub async fn export_backup(
+    app: tauri::AppHandle,
+    path: String,
+    include_audio: bool,
+) -> AppResult<crate::backup::ExportInfo> {
+    use tauri::Manager;
+    let audio_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| AppError::Other(e.to_string()))?
+        .join("audio");
+    let version = app.package_info().version.to_string();
+    tauri::async_runtime::spawn_blocking(move || {
+        let db = app.state::<Db>();
+        let conn =
+            db.0.lock()
+                .map_err(|_| AppError::Db("blokada bazy".into()))?;
+        crate::backup::export(
+            &conn,
+            &audio_dir,
+            std::path::Path::new(&path),
+            include_audio,
+            &version,
+        )
+    })
+    .await
+    .map_err(|e| AppError::Other(e.to_string()))?
+}
+
+/// Rozpakowuje kopię do poczekalni i restartuje aplikację; podmiana bazy następuje przy starcie.
+#[tauri::command]
+pub async fn restore_backup(app: tauri::AppHandle, path: String) -> AppResult<()> {
+    use tauri::Manager;
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| AppError::Other(e.to_string()))?;
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::backup::stage_restore(std::path::Path::new(&path), &dir)
+    })
+    .await
+    .map_err(|e| AppError::Other(e.to_string()))??;
+    app.restart()
+}
+
+#[tauri::command]
+pub fn get_data_dir(app: tauri::AppHandle) -> AppResult<String> {
+    use tauri::Manager;
+    Ok(app
+        .path()
+        .app_data_dir()
+        .map_err(|e| AppError::Other(e.to_string()))?
+        .to_string_lossy()
+        .into_owned())
+}

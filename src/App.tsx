@@ -3,6 +3,8 @@ import { AudioLines, Clock, FileText, Settings2, Users, type LucideIcon } from "
 import { Brand } from "./components/Brand";
 import { useApp, type Tab } from "./lib/store";
 import { Artists } from "./screens/Artists";
+import { History } from "./screens/History";
+import { Rules } from "./screens/Rules";
 import { Run } from "./screens/Run";
 import { Settings } from "./screens/Settings";
 import { Wizard } from "./screens/Wizard";
@@ -15,17 +17,6 @@ const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: "rules", label: "Zasady", icon: FileText },
   { id: "settings", label: "Ustawienia", icon: Settings2 },
 ];
-
-function Soon({ title }: { title: string }) {
-  return (
-    <section className="view">
-      <div className="view-head">
-        <h1>{title}</h1>
-        <p className="lede">Ten ekran powstanie w kolejnym etapie.</p>
-      </div>
-    </section>
-  );
-}
 
 export default function App() {
   const { ready, tab, setTab, settings, hasGemini, toast, load } = useApp();
@@ -70,10 +61,9 @@ export default function App() {
         <div hidden={tab !== "artists"}>
           <Artists active={tab === "artists"} />
         </div>
+        {tab === "history" && <History />}
+        {tab === "rules" && <Rules />}
         {tab === "settings" && <Settings />}
-        {tab !== "run" && tab !== "artists" && tab !== "settings" && (
-          <Soon title={TABS.find((t) => t.id === tab)!.label} />
-        )}
       </main>
       {toast && <div className="toast">{toast}</div>}
     </>
