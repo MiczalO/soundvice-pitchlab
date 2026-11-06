@@ -67,6 +67,10 @@ pub fn classify(service: &'static str, status: u16, body: &str) -> AppError {
     if key_problem {
         return AppError::BadKey(service);
     }
+    // 503 (Gemini „high demand”) i 529 (Anthropic „overloaded”): przeciążenie po stronie dostawcy.
+    if status == 503 || status == 529 {
+        return AppError::Overloaded(service);
+    }
     if status == 429 {
         let hint = if body.contains("limit: 0") {
             "Ten model nie ma przydziału w Twoim planie (darmowy plan zwykle nie obejmuje modeli Pro). \
@@ -116,6 +120,15 @@ mod tests {
         );
         assert!(e.to_string().contains("Odczekaj chwilę"));
         assert!(!is_hard_quota("Resource exhausted"));
+    }
+
+    #[test]
+    fn high_demand_503_is_overloaded_not_generic() {
+        let body = r#"{"error":{"code":503,"message":"This model is currently experiencing high demand.","status":"UNAVAILABLE"}}"#;
+        let e = classify("Gemini", 503, body);
+        assert_eq!(e.code(), "overloaded");
+        assert!(e.to_string().contains("przeciążony"));
+        assert_eq!(classify("Anthropic", 529, "{}").code(), "overloaded");
     }
 
     #[test]

@@ -12,6 +12,12 @@ pub enum AppError {
     #[error("Przekroczono limit zapytań ({0}). {1}")]
     RateLimited(&'static str, String),
     #[error(
+        "{0} jest chwilowo przeciążony (to nie problem z kluczem ani z internetem). \
+         Spróbuj ponownie za kilka minut albo wybierz w Ustawieniach inny model, \
+         najlepiej stabilny (bez „preview”)."
+    )]
+    Overloaded(&'static str),
+    #[error(
         "Brak połączenia z siecią lub serwer nie odpowiada. Sprawdź internet i spróbuj ponownie."
     )]
     Network,
@@ -41,6 +47,7 @@ impl AppError {
             AppError::NoKey(_) => "no_key",
             AppError::BadKey(_) => "bad_key",
             AppError::RateLimited(..) => "rate_limited",
+            AppError::Overloaded(_) => "overloaded",
             AppError::Network => "network",
             AppError::Timeout => "timeout",
             AppError::Api { .. } => "api",

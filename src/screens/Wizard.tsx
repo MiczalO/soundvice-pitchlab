@@ -46,7 +46,7 @@ export function Wizard() {
       const ae = toAppError(e);
       setErr(ae.message);
       // Klucz jest poprawny (lista modeli się pobrała) — limit dotyczy tylko wybranego modelu.
-      setLimited(ae.code === "rate_limited");
+      setLimited(ae.code === "rate_limited" || ae.code === "overloaded");
     } finally {
       setBusy(false);
     }
