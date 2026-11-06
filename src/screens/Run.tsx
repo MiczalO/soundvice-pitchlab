@@ -9,6 +9,7 @@ import { Steps, type StepMap } from "../components/Steps";
 import {
   api,
   toAppError,
+  type ArtistRow,
   type DoneEvent,
   type PreparedAudio,
   type StepEvent,
@@ -21,6 +22,9 @@ const AUDIO_EXT = ["mp3", "wav", "flac", "m4a", "aac", "ogg", "aiff", "aif"];
 
 export function Run({ active }: { active: boolean }) {
   const notify = useApp((s) => s.notify);
+  const openTrackId = useApp((s) => s.openTrackId);
+  const [artistNames, setArtistNames] = useState<ArtistRow[]>([]);
+  const [forceResearch, setForceResearch] = useState(false);
   const [audio, setAudio] = useState<PreparedAudio | null>(null);
   const [preparing, setPreparing] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -89,6 +93,22 @@ export function Run({ active }: { active: boolean }) {
     };
   }, [active, loadFile]);
 
+  useEffect(() => {
+    api
+      .listArtists()
+      .then(setArtistNames)
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (openTrackId == null) return;
+    let alive = true;
+    api.getTrack(openTrackId).then((t) => alive && t && setTrack(t));
+    return () => {
+      alive = false;
+    };
+  }, [openTrackId]);
+
   // Postęp i zakończenie joba.
   useEffect(() => {
     const subs = [
@@ -105,7 +125,11 @@ export function Run({ active }: { active: boolean }) {
         const d = e.payload;
         if (d.cancelled) notify("Zatrzymano");
         else if (d.error) setError(d.error.message);
-        else if (d.track_id != null) setTrack(await api.getTrack(d.track_id));
+        if (d.track_id != null) setTrack(await api.getTrack(d.track_id));
+        api
+          .listArtists()
+          .then(setArtistNames)
+          .catch(() => {});
       }),
     ];
     return () => {
@@ -135,6 +159,7 @@ export function Run({ active }: { active: boolean }) {
         releaseDate: date || null,
         campaignContext: ctx,
         lyrics,
+        forceResearch,
       });
       setJobId(id);
     } catch (e) {
@@ -216,9 +241,15 @@ export function Run({ active }: { active: boolean }) {
                 id="fArtist"
                 type="text"
                 placeholder="Pseudonim"
+                list="artistOpts"
                 value={artist}
                 onChange={(e) => setArtist(e.target.value)}
               />
+              <datalist id="artistOpts">
+                {artistNames.map((a) => (
+                  <option key={a.id} value={a.name} />
+                ))}
+              </datalist>
             </div>
           </div>
           <div className="row">
@@ -263,6 +294,20 @@ export function Run({ active }: { active: boolean }) {
               onChange={(e) => setLyrics(e.target.value)}
             />
           </div>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={forceResearch}
+              onChange={(e) => setForceResearch(e.target.checked)}
+            />
+            <span>
+              Odśwież research artysty, nawet jeśli ma pigułkę
+              <br />
+              <span className="hint">
+                Wynik trafi jako propozycja — Twoja pigułka się nie zmieni.
+              </span>
+            </span>
+          </label>
           <div className="row">
             <button className="btn primary big" disabled={running || preparing} onClick={start}>
               <Sparkles size={17} aria-hidden="true" />
@@ -289,7 +334,8 @@ export function Run({ active }: { active: boolean }) {
                 </div>
               </div>
               <p className="hint">
-                Analiza zapisana. Pitch i pigułka artysty pojawią się w kolejnych etapach.
+                Analiza zapisana. Pitch pojawi się w kolejnym etapie; pigułkę artysty edytujesz w
+                karcie Artyści.
               </p>
               <AnalysisView an={track.analysis} />
             </>

@@ -5,6 +5,7 @@ pub mod db;
 pub mod error;
 pub mod jobs;
 pub mod pipeline;
+pub mod research;
 pub mod secrets;
 pub mod settings;
 
@@ -35,6 +36,15 @@ pub fn run() {
             commands::test_connection,
             commands::prepare_audio,
             commands::start_analysis,
+            commands::start_research,
+            commands::list_artists,
+            commands::get_artist,
+            commands::create_artist,
+            commands::update_artist,
+            commands::delete_artist,
+            commands::accept_proposal,
+            commands::reject_proposal,
+            commands::restore_pill,
             commands::cancel_job,
             commands::get_track,
         ])

@@ -33,7 +33,12 @@ pub async fn send(service: &'static str, make: impl Fn() -> RequestBuilder) -> A
 
 /// Limit, który nie zniknie po kilkunastu sekundach.
 fn is_hard_quota(body: &str) -> bool {
-    body.contains("limit: 0") || body.contains("PerDay")
+    if body.contains("PerMinute") {
+        return false; // limit minutowy mija sam — jedno ponowienie ma sens
+    }
+    body.contains("limit: 0")
+        || body.contains("PerDay")
+        || body.contains("exceeded your current quota")
 }
 
 fn retry_after(res: &Response) -> Option<u64> {
@@ -109,6 +114,16 @@ mod tests {
         assert!(m.contains("nie ma przydziału"), "{m}");
         assert!(m.contains("limit: 0"), "{m}");
         assert!(is_hard_quota(body));
+    }
+
+    #[test]
+    fn plan_quota_is_hard_but_per_minute_is_not() {
+        assert!(is_hard_quota(
+            "You exceeded your current quota, please check your plan"
+        ));
+        assert!(!is_hard_quota(
+            "You exceeded your current quota ... GenerateRequestsPerMinutePerProjectPerModel"
+        ));
     }
 
     #[test]

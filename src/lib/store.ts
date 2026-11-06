@@ -11,6 +11,9 @@ interface State {
   hasGemini: boolean;
   hasAnthropic: boolean;
   toast: string | null;
+  /** Utwór do otwarcia w widoku „Analiza i pitch” (z Artystów / Historii). */
+  openTrackId: number | null;
+  openTrack: (id: number) => void;
   setTab: (t: Tab) => void;
   notify: (msg: string) => void;
   load: () => Promise<void>;
@@ -33,6 +36,8 @@ export const useApp = create<State>((set, get) => ({
   hasGemini: false,
   hasAnthropic: false,
   toast: null,
+  openTrackId: null,
+  openTrack: (id) => set({ openTrackId: id, tab: "run" }),
   setTab: (tab) => set({ tab }),
   notify: (toast) => {
     set({ toast });

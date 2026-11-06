@@ -1,5 +1,5 @@
-//! Pipeline „Analiza i pitch”. Na tym etapie: przygotowanie pliku + odsłuch Gemini
-//! (kroki research / pigułka / pitch dojdą w kolejnych etapach).
+//! Pipeline „Analiza i pitch”: przygotowanie pliku → odsłuch Gemini → research/pigułka
+//! (krok pitchu dojdzie w kolejnym etapie).
 
 use std::path::Path;
 
@@ -13,6 +13,7 @@ use crate::ai::{analysis, json, prompts};
 use crate::db::{Db, repo};
 use crate::error::{AppError, AppResult};
 use crate::jobs::{StepState, emit_step};
+use crate::research;
 use crate::settings;
 
 /// Poniżej tego rozmiaru plik idzie inline, powyżej przez Files API.
@@ -36,6 +37,16 @@ pub struct AnalysisParams {
     pub campaign_context: String,
     #[serde(default)]
     pub lyrics: String,
+    /// Odśwież research, nawet jeśli artysta ma pigułkę (wynik trafi jako propozycja).
+    #[serde(default)]
+    pub force_research: bool,
+}
+
+/// Zapisany utwór po odsłuchu.
+pub struct Saved {
+    pub track_id: i64,
+    pub artist_id: i64,
+    pub genre: String,
 }
 
 fn db_err() -> AppError {
@@ -99,13 +110,13 @@ async fn audio_part(
     })
 }
 
-/// Uruchamia odsłuch i zapisuje utwór z analizą. Zwraca id utworu.
-pub async fn run(
+/// Odsłuch Gemini + zapis utworu z analizą.
+async fn listen_and_save(
     app: &AppHandle,
     job_id: u64,
     cancel: &CancellationToken,
     p: &AnalysisParams,
-) -> AppResult<i64> {
+) -> AppResult<Saved> {
     if p.artist.trim().is_empty() {
         return Err(AppError::Other("Wpisz artystę.".into()));
     }
@@ -181,7 +192,7 @@ pub async fn run(
     .join(" · ");
     emit_step(app, job_id, "listen", StepState::Done, Some(summary));
 
-    let track_id = {
+    let (track_id, artist_id) = {
         let db = app.state::<Db>();
         let mut conn = db.0.lock().map_err(|_| db_err())?;
         let tx = conn.transaction()?;
@@ -203,15 +214,68 @@ pub async fn run(
         let json = serde_json::to_string(&parsed).map_err(|e| AppError::Other(e.to_string()))?;
         repo::insert_analysis(&tx, id, &model, &json)?;
         tx.commit()?;
-        id
+        (id, artist_id)
     };
 
-    for (step, why) in [
-        ("research", "dostępne w kolejnym etapie"),
-        ("pill", "dostępne w kolejnym etapie"),
-        ("pitch", "dostępne w kolejnym etapie"),
-    ] {
-        emit_step(app, job_id, step, StepState::Skip, Some(why.into()));
+    Ok(Saved {
+        track_id,
+        artist_id,
+        genre: parsed.primary_genre,
+    })
+}
+
+/// Pełny przebieg: odsłuch, potem research/pigułka (gdy artysta nie ma pigułki
+/// albo wymuszono odświeżenie). Utwór z analizą zostaje zapisany nawet wtedy,
+/// gdy późniejszy krok zawiedzie — dlatego zwracamy też `track_id` przy błędzie.
+pub async fn run(
+    app: &AppHandle,
+    job_id: u64,
+    cancel: &CancellationToken,
+    p: &AnalysisParams,
+) -> (Option<i64>, AppResult<()>) {
+    let saved = match listen_and_save(app, job_id, cancel, p).await {
+        Ok(s) => s,
+        Err(e) => return (None, Err(e)),
+    };
+    let track_id = Some(saved.track_id);
+
+    let has_pill = {
+        let db = app.state::<Db>();
+        let Ok(conn) = db.0.lock() else {
+            return (track_id, Err(db_err()));
+        };
+        crate::db::artists::detail(&conn, saved.artist_id)
+            .ok()
+            .flatten()
+            .is_some_and(|d| !d.pill.trim().is_empty())
+    };
+    if has_pill && !p.force_research {
+        emit_step(
+            app,
+            job_id,
+            "research",
+            StepState::Skip,
+            Some("pigułka istnieje — używam jej".into()),
+        );
+        emit_step(
+            app,
+            job_id,
+            "pill",
+            StepState::Done,
+            Some("z pamięci".into()),
+        );
+    } else {
+        let ctx = (p.title.clone(), saved.genre);
+        if let Err(e) = research::run(app, job_id, cancel, saved.artist_id, Some(ctx)).await {
+            return (track_id, Err(e));
+        }
     }
-    Ok(track_id)
+    emit_step(
+        app,
+        job_id,
+        "pitch",
+        StepState::Skip,
+        Some("dostępne w kolejnym etapie".into()),
+    );
+    (track_id, Ok(()))
 }

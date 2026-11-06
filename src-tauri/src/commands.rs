@@ -125,41 +125,143 @@ pub async fn prepare_audio(app: tauri::AppHandle, path: String) -> AppResult<Pre
     .map_err(|e| AppError::Other(e.to_string()))?
 }
 
+/// Zamienia wynik joba na zdarzenie końcowe dla UI.
+fn done_event(job_id: u64, track_id: Option<i64>, res: AppResult<()>) -> crate::jobs::DoneEvent {
+    use crate::jobs::DoneEvent;
+    match res {
+        Ok(()) => DoneEvent {
+            job_id,
+            track_id,
+            cancelled: false,
+            error: None,
+        },
+        Err(AppError::Cancelled) => DoneEvent {
+            job_id,
+            track_id,
+            cancelled: true,
+            error: None,
+        },
+        Err(e) => DoneEvent {
+            job_id,
+            track_id,
+            cancelled: false,
+            error: Some(e),
+        },
+    }
+}
+
 #[tauri::command]
 pub fn start_analysis(
     app: tauri::AppHandle,
     jobs: State<crate::jobs::Jobs>,
     params: crate::pipeline::AnalysisParams,
 ) -> u64 {
-    use crate::jobs::{DoneEvent, emit_done};
     let (job_id, cancel) = jobs.start();
     tauri::async_runtime::spawn(async move {
-        let res = crate::pipeline::run(&app, job_id, &cancel, &params).await;
-        let ev = match res {
-            Ok(track_id) => DoneEvent {
-                job_id,
-                track_id: Some(track_id),
-                cancelled: false,
-                error: None,
-            },
-            Err(AppError::Cancelled) => DoneEvent {
-                job_id,
-                track_id: None,
-                cancelled: true,
-                error: None,
-            },
-            Err(e) => DoneEvent {
-                job_id,
-                track_id: None,
-                cancelled: false,
-                error: Some(e),
-            },
-        };
+        let (track_id, res) = crate::pipeline::run(&app, job_id, &cancel, &params).await;
         use tauri::Manager;
         app.state::<crate::jobs::Jobs>().finish(job_id);
-        emit_done(&app, ev);
+        crate::jobs::emit_done(&app, done_event(job_id, track_id, res));
     });
     job_id
+}
+
+/// Research istniejącego artysty (z karty Artyści): tworzy propozycję albo pierwszą pigułkę.
+#[tauri::command]
+pub fn start_research(
+    app: tauri::AppHandle,
+    jobs: State<crate::jobs::Jobs>,
+    artist_id: i64,
+) -> u64 {
+    let (job_id, cancel) = jobs.start();
+    tauri::async_runtime::spawn(async move {
+        use tauri::Manager;
+        // Kontekst: ostatni utwór artysty (tytuł + gatunek z analizy).
+        let ctx = {
+            let db = app.state::<Db>();
+            db.0.lock().ok().and_then(|conn| {
+                let tid: i64 = conn
+                    .query_row(
+                        "SELECT id FROM tracks WHERE artist_id=?1 ORDER BY id DESC LIMIT 1",
+                        [artist_id],
+                        |r| r.get(0),
+                    )
+                    .ok()?;
+                let t = crate::db::repo::get_track(&conn, tid).ok()??;
+                Some((
+                    t.title,
+                    t.analysis
+                        .and_then(|a| a["primary_genre"].as_str().map(String::from))
+                        .unwrap_or_default(),
+                ))
+            })
+        };
+        let res = crate::research::run(&app, job_id, &cancel, artist_id, ctx)
+            .await
+            .map(|_| ());
+        app.state::<crate::jobs::Jobs>().finish(job_id);
+        crate::jobs::emit_done(&app, done_event(job_id, None, res));
+    });
+    job_id
+}
+
+// ---------- artyści ----------
+
+fn lock<'a>(db: &'a State<'_, Db>) -> AppResult<std::sync::MutexGuard<'a, rusqlite::Connection>> {
+    db.0.lock().map_err(|_| AppError::Db("blokada bazy".into()))
+}
+
+#[tauri::command]
+pub fn list_artists(db: State<Db>) -> AppResult<Vec<crate::db::artists::ArtistRow>> {
+    crate::db::artists::list(&*lock(&db)?)
+}
+
+#[tauri::command]
+pub fn get_artist(db: State<Db>, id: i64) -> AppResult<Option<crate::db::artists::ArtistDetail>> {
+    crate::db::artists::detail(&*lock(&db)?, id)
+}
+
+#[tauri::command]
+pub fn create_artist(db: State<Db>, name: String) -> AppResult<i64> {
+    if name.trim().is_empty() {
+        return Err(AppError::Other("Wpisz nazwę artysty.".into()));
+    }
+    crate::db::repo::ensure_artist(&*lock(&db)?, &name)
+}
+
+#[tauri::command]
+pub fn update_artist(
+    db: State<Db>,
+    id: i64,
+    pill: String,
+    manager_notes: String,
+    research_hints: String,
+) -> AppResult<()> {
+    crate::db::artists::update(&*lock(&db)?, id, &pill, &manager_notes, &research_hints)
+}
+
+#[tauri::command]
+pub fn delete_artist(db: State<Db>, id: i64) -> AppResult<()> {
+    crate::db::artists::delete(&*lock(&db)?, id)
+}
+
+#[tauri::command]
+pub fn accept_proposal(
+    db: State<Db>,
+    proposal_id: i64,
+    mode: crate::db::artists::AcceptMode,
+) -> AppResult<()> {
+    crate::db::artists::accept_proposal(&mut *lock(&db)?, proposal_id, mode)
+}
+
+#[tauri::command]
+pub fn reject_proposal(db: State<Db>, proposal_id: i64) -> AppResult<()> {
+    crate::db::artists::reject_proposal(&*lock(&db)?, proposal_id)
+}
+
+#[tauri::command]
+pub fn restore_pill(db: State<Db>, history_id: i64) -> AppResult<()> {
+    crate::db::artists::restore_history(&mut *lock(&db)?, history_id)
 }
 
 #[tauri::command]

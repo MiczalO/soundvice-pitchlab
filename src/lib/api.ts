@@ -61,6 +61,17 @@ export const api = {
     ),
   prepareAudio: (path: string) => invoke<PreparedAudio>("prepare_audio", { path }),
   startAnalysis: (params: AnalysisParams) => invoke<number>("start_analysis", { params }),
+  listArtists: () => invoke<ArtistRow[]>("list_artists"),
+  getArtist: (id: number) => invoke<ArtistDetail | null>("get_artist", { id }),
+  createArtist: (name: string) => invoke<number>("create_artist", { name }),
+  updateArtist: (a: { id: number; pill: string; managerNotes: string; researchHints: string }) =>
+    invoke<void>("update_artist", a),
+  deleteArtist: (id: number) => invoke<void>("delete_artist", { id }),
+  acceptProposal: (proposalId: number, mode: "replace" | "append") =>
+    invoke<void>("accept_proposal", { proposalId, mode }),
+  rejectProposal: (proposalId: number) => invoke<void>("reject_proposal", { proposalId }),
+  restorePill: (historyId: number) => invoke<void>("restore_pill", { historyId }),
+  startResearch: (artistId: number) => invoke<number>("start_research", { artistId }),
   cancelJob: (jobId: number) => invoke<void>("cancel_job", { jobId }),
   getTrack: (trackId: number) => invoke<TrackView | null>("get_track", { trackId }),
 };
@@ -87,6 +98,7 @@ export interface AnalysisParams {
   releaseDate: string | null;
   campaignContext: string;
   lyrics: string;
+  forceResearch: boolean;
 }
 
 export interface Analysis {
@@ -136,4 +148,48 @@ export interface DoneEvent {
   track_id: number | null;
   cancelled: boolean;
   error: AppError | null;
+}
+
+export interface ArtistRow {
+  id: number;
+  name: string;
+  has_pill: boolean;
+  has_proposal: boolean;
+  updated_at: number;
+}
+export interface SourceRow {
+  title: string;
+  url: string;
+}
+export interface Proposal {
+  id: number;
+  pill: string;
+  dossier: string;
+  sources: SourceRow[];
+  created_at: number;
+}
+export interface HistoryRow {
+  id: number;
+  pill: string;
+  changed_at: number;
+  change_type: "manual" | "research_accept" | "append" | "restore";
+}
+export interface TrackBrief {
+  id: number;
+  title: string;
+  created_at: number;
+}
+export interface ArtistDetail {
+  id: number;
+  name: string;
+  pill: string;
+  manager_notes: string;
+  research_hints: string;
+  dossier: string;
+  updated_at: number;
+  researched_at: number | null;
+  sources: SourceRow[];
+  proposal: Proposal | null;
+  history: HistoryRow[];
+  tracks: TrackBrief[];
 }

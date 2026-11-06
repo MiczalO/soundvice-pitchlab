@@ -1092,3 +1092,35 @@ table.hist tbody tr:hover td {
 a {
   color: var(--accent);
 }
+.diff-del {
+  background: color-mix(in srgb, var(--bad) 20%, transparent);
+  border-radius: 3px;
+}
+.diff-add {
+  background: color-mix(in srgb, var(--signal) 22%, transparent);
+  border-radius: 3px;
+}
+.hist-item {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.hist-item .pv {
+  font-size: 13px;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+.hist-item .m {
+  font: 11.5px var(--f-mono);
+  color: var(--muted);
+}
+.search {
+  width: 100%;
+}
