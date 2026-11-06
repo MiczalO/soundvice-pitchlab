@@ -1,0 +1,926 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Soundvice pitchLAB</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: konsola studyjna — sticky pasek z logotypem i kartami; lewa kolumna = wejście (waveform, metadane), prawa = wynik; miernik 500 znaków jako segmentowy VU */
+:root{
+  --bg:#f3f1f7; --bg-2:#ebe8f2; --surface:#ffffff; --surface-2:#f6f4fa; --ink:#17141f; --muted:#5d5870; --line:#dfdae8; --line-2:#cbc4d9;
+  --accent:#6d4aff; --accent-ink:#ffffff; --accent-soft:#ece6ff; --accent-line:#b9a6ff;
+  --signal:#12a150; --warn:#c27803; --bad:#d4342c;
+  --wave:#6d4aff; --wave-dim:#c9bdf5;
+  --f-brand:"Unbounded", "Manrope", system-ui, sans-serif;
+  --f-body:"Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, Consolas, monospace;
+  --r:14px; --r-sm:9px; --t:160ms cubic-bezier(.2,.7,.3,1);
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0d0c12; --bg-2:#121019; --surface:#17151f; --surface-2:#1e1b28; --ink:#ece9f4; --muted:#9c96ad; --line:#2a2636; --line-2:#3a3549;
+  --accent:#a48bff; --accent-ink:#120c26; --accent-soft:#251d40; --accent-line:#5b48a8;
+  --signal:#3ddc84; --warn:#f5b73b; --bad:#ff6b5e;
+  --wave:#a48bff; --wave-dim:#3b3358; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d0c12; --bg-2:#121019; --surface:#17151f; --surface-2:#1e1b28; --ink:#ece9f4; --muted:#9c96ad; --line:#2a2636; --line-2:#3a3549;
+  --accent:#a48bff; --accent-ink:#120c26; --accent-soft:#251d40; --accent-line:#5b48a8;
+  --signal:#3ddc84; --warn:#f5b73b; --bad:#ff6b5e;
+  --wave:#a48bff; --wave-dim:#3b3358; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--f-body);-webkit-font-smoothing:antialiased}
+[hidden]{display:none!important}
+svg.i{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.wrap{max-width:1240px;margin:0 auto;padding-block:0 80px;padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px))}
+
+/* ---------- pasek górny ---------- */
+header.top{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.top-in{max-width:1240px;margin:0 auto;display:flex;align-items:center;gap:28px;flex-wrap:wrap;padding-block:12px;padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px))}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink)}
+.brand-mark{width:34px;height:34px;border-radius:10px;background:var(--ink);display:grid;place-items:center}
+.brand-mark span{display:flex;gap:2px;align-items:center;height:16px}
+.brand-mark i{width:3px;border-radius:2px;background:var(--bg);display:block}
+.brand-text{display:flex;align-items:baseline;gap:6px;line-height:1}
+.brand-text b{font:700 17px var(--f-brand);letter-spacing:-.02em}
+.brand-text em{font:600 15px var(--f-brand);font-style:normal;color:var(--muted);letter-spacing:-.01em}
+.brand-text em strong{font:600 10.5px var(--f-mono);letter-spacing:.1em;background:var(--accent);color:var(--accent-ink);padding:3px 5px 2px;border-radius:5px;margin-left:1px;vertical-align:2px}
+nav.tabs{display:flex;gap:2px;flex-wrap:wrap;background:var(--surface-2);border:1px solid var(--line);padding:3px;border-radius:12px}
+nav.tabs button{display:flex;align-items:center;gap:7px;font:600 13.5px var(--f-body);background:none;border:0;color:var(--muted);padding:0 12px;min-height:38px;border-radius:9px;cursor:pointer;transition:color var(--t),background var(--t)}
+nav.tabs button svg.i{width:16px;height:16px}
+nav.tabs button:hover{color:var(--ink)}
+nav.tabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 0 var(--line-2),0 0 0 1px var(--line)}
+nav.tabs button[aria-selected="true"] svg.i{color:var(--accent)}
+.status-pill{margin-left:auto;display:flex;align-items:center;gap:8px;font:500 12px var(--f-mono);color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:6px 12px}
+.status-pill .led{width:8px;height:8px;border-radius:50%;background:var(--signal);box-shadow:0 0 0 3px color-mix(in srgb,var(--signal) 22%,transparent)}
+.status-pill .led.no{background:var(--bad);box-shadow:0 0 0 3px color-mix(in srgb,var(--bad) 22%,transparent)}
+@media (max-width:760px){.status-pill{margin-left:0}nav.tabs button span.lab{display:none}nav.tabs button{padding:0 11px;min-height:40px}}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ---------- typografia ---------- */
+h1,h2,h3{margin:0;text-wrap:balance}
+h1{font:700 clamp(24px,3.2vw,34px)/1.1 var(--f-brand);letter-spacing:-.03em}
+h2{font:700 18px/1.25 var(--f-brand);letter-spacing:-.02em}
+h3{font:700 14px var(--f-body)}
+.eyebrow{display:flex;align-items:center;gap:8px;font:500 11px var(--f-mono);text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}
+.eyebrow .flow{display:inline-flex;gap:6px;align-items:center}
+.eyebrow .flow i{font-style:normal;color:var(--accent)}
+.lede{color:var(--muted);max-width:68ch;margin:10px 0 0;font-size:15px}
+section.view{display:grid;gap:24px;padding-top:30px}
+.view-head{display:grid;gap:4px}
+
+/* ---------- siatki ---------- */
+.grid-2{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:20px;align-items:start}
+.grid-art{display:grid;grid-template-columns:280px minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:900px){.grid-2,.grid-art{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:22px;display:grid;gap:16px;min-width:0}
+.panel.sticky{position:sticky;top:84px}
+@media (max-width:900px){.panel.sticky{position:static}}
+.panel-h{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.sep{height:1px;background:var(--line);margin:2px 0}
+
+/* ---------- formularze ---------- */
+.field{display:grid;gap:7px}
+.field label,.lbl{font-weight:700;font-size:13px}
+.hint{font-size:12.5px;color:var(--muted);line-height:1.5}
+input[type=text],input[type=password],input[type=date],select,textarea{font:inherit;font-size:15px;color:var(--ink);background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px;width:100%;min-height:44px;transition:border-color var(--t),background var(--t)}
+input:hover,select:hover,textarea:hover{border-color:var(--line-2)}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);background:var(--surface);box-shadow:0 0 0 3px var(--accent-soft)}
+textarea{resize:vertical;min-height:96px;line-height:1.55}
+textarea.mono{font:13px/1.6 var(--f-mono)}
+::placeholder{color:color-mix(in srgb,var(--muted) 75%,transparent)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.row > .field{flex:1 1 180px}
+.check{display:flex;gap:10px;align-items:flex-start;font-size:14px;cursor:pointer;padding:10px 12px;border:1px dashed var(--line-2);border-radius:var(--r-sm)}
+.check input{margin-top:4px;accent-color:var(--accent);width:16px;height:16px}
+
+/* ---------- przyciski ---------- */
+button.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font:700 14px var(--f-body);border-radius:10px;padding:0 16px;min-height:44px;cursor:pointer;border:1px solid var(--line-2);background:var(--surface);color:var(--ink);transition:transform var(--t),background var(--t),border-color var(--t),filter var(--t)}
+button.btn:hover{border-color:var(--muted)}
+button.btn:active{transform:translateY(1px)}
+button.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+button.btn.primary:hover{filter:brightness(1.08)}
+button.btn.big{min-height:52px;padding:0 22px;font-size:15px;border-radius:12px}
+button.btn.ghost{background:none;border-color:transparent;color:var(--muted)}
+button.btn.ghost:hover{color:var(--ink);background:var(--surface-2)}
+button.btn.danger{color:var(--bad)}
+button.btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+button.btn svg.i{width:17px;height:17px}
+
+/* ---------- drop + waveform ---------- */
+.drop{position:relative;border:1.5px dashed var(--line-2);border-radius:var(--r);padding:24px 18px;text-align:center;background:var(--surface-2);cursor:pointer;display:grid;gap:6px;justify-items:center;transition:border-color var(--t),background var(--t)}
+.drop:hover{border-color:var(--accent-line)}
+.drop.on{border-color:var(--accent);background:var(--accent-soft)}
+.drop .ico{width:44px;height:44px;border-radius:12px;background:var(--surface);border:1px solid var(--line);display:grid;place-items:center;color:var(--accent)}
+.drop strong{font:700 15px var(--f-brand);letter-spacing:-.01em}
+.drop.has{padding:14px;text-align:left;justify-items:stretch;border-style:solid;border-color:var(--line)}
+.deck{display:grid;gap:10px}
+.deck-top{display:flex;align-items:center;gap:12px}
+.play{width:44px;height:44px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;cursor:pointer;flex:none;transition:filter var(--t)}
+.play:hover{filter:brightness(1.08)}
+.play svg.i{width:18px;height:18px;fill:currentColor;stroke:none}
+.deck-meta{min-width:0;flex:1}
+.deck-meta b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file-meta{font:12px var(--f-mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.wave{position:relative;height:72px;border-radius:10px;overflow:hidden;cursor:pointer;background:var(--surface)}
+.wave canvas{width:100%;height:100%;display:block}
+.deck .swap{font-size:12.5px;color:var(--accent);background:none;border:0;cursor:pointer;font-weight:700;padding:6px 0;min-height:32px}
+
+/* ---------- kroki ---------- */
+ol.steps{list-style:none;margin:0;padding:14px;display:grid;gap:2px;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r)}
+ol.steps li{display:grid;grid-template-columns:30px minmax(0,1fr);gap:12px;align-items:start;font-size:14px;padding:7px 4px;position:relative}
+ol.steps li:not(:last-child)::after{content:"";position:absolute;left:18px;top:34px;bottom:-6px;width:1.5px;background:var(--line-2)}
+ol.steps .dot{width:28px;height:28px;border-radius:50%;border:1.5px solid var(--line-2);display:grid;place-items:center;font:600 11px var(--f-mono);color:var(--muted);background:var(--surface);position:relative;z-index:1}
+ol.steps li.active .dot{border-color:var(--accent);color:var(--accent)}
+ol.steps li.active .dot::before{content:"";position:absolute;inset:-4px;border-radius:50%;border:2px solid transparent;border-top-color:var(--accent);animation:spin .9s linear infinite}
+ol.steps li.done .dot{background:var(--signal);border-color:var(--signal);color:var(--bg)}
+ol.steps li.skip .dot{opacity:.55}
+ol.steps li.err .dot{background:var(--bad);border-color:var(--bad);color:var(--bg)}
+ol.steps .t{font-weight:700;padding-top:3px}
+ol.steps .sub{font-size:12.5px;color:var(--muted)}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---------- wynik ---------- */
+.result-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.pitch-box{display:grid;gap:10px;padding:16px;border-radius:var(--r);background:var(--surface-2);border:1px solid var(--line)}
+.pitch-box textarea{font-size:16.5px;line-height:1.65;min-height:180px;background:var(--surface);border-color:var(--line)}
+.meter{display:grid;grid-template-columns:repeat(25,1fr);gap:3px;height:12px}
+.meter i{background:var(--line);border-radius:2px;transition:background var(--t)}
+.meter i.on{background:var(--signal)}
+.meter i.on.hot{background:var(--warn)}
+.meter i.on.over{background:var(--bad)}
+.meter-scale{display:flex;justify-content:space-between;font:10.5px var(--f-mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.count{font:600 13px var(--f-mono);font-variant-numeric:tabular-nums}
+.count.over{color:var(--bad)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:13px;font-weight:600;padding:4px 11px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line)}
+.chips.acc .chip{background:var(--accent-soft);border-color:var(--accent-line);color:var(--ink)}
+.kv{display:grid;grid-template-columns:150px minmax(0,1fr);gap:10px 16px;font-size:14px}
+.kv dt{color:var(--muted);font:500 11.5px var(--f-mono);text-transform:uppercase;letter-spacing:.06em;padding-top:3px}
+.kv dd{margin:0}
+@media (max-width:540px){.kv{grid-template-columns:minmax(0,1fr)}.kv dt{margin-top:6px}}
+details{border-top:1px solid var(--line);padding-top:12px}
+summary{cursor:pointer;font-weight:700;font-size:14px;list-style:none;display:flex;align-items:center;gap:8px;min-height:32px}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"";width:7px;height:7px;border-right:1.8px solid var(--muted);border-bottom:1.8px solid var(--muted);transform:rotate(-45deg);transition:transform var(--t);margin-right:2px}
+details[open] > summary::before{transform:rotate(45deg)}
+.ts{font:600 12px var(--f-mono);color:var(--accent);font-variant-numeric:tabular-nums;background:var(--accent-soft);padding:1px 6px;border-radius:5px}
+pre.raw{white-space:pre-wrap;word-break:break-word;font:12.5px/1.6 var(--f-mono);background:var(--surface-2);border:1px solid var(--line);padding:14px;border-radius:var(--r-sm);max-height:440px;overflow:auto;margin:0}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:11px 18px;border-radius:12px;font-size:14px;font-weight:600;z-index:20;max-width:calc(100% - 32px);box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.err-box{border:1px solid var(--bad);background:color-mix(in srgb,var(--bad) 8%,transparent);color:var(--bad);border-radius:var(--r-sm);padding:12px 14px;font-size:14px;white-space:pre-wrap;word-break:break-word}
+.empty-state{display:grid;gap:18px}
+.preview-list{display:grid;gap:10px;margin:0;padding:0;list-style:none}
+.preview-list li{display:grid;grid-template-columns:36px minmax(0,1fr);gap:12px;align-items:start;padding:12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface-2)}
+.preview-list .pi{width:36px;height:36px;border-radius:10px;background:var(--surface);border:1px solid var(--line);display:grid;place-items:center;color:var(--accent)}
+.preview-list b{display:block;font-size:14px}
+
+/* ---------- artyści ---------- */
+.art-list{display:grid;gap:2px}
+.art-list button{all:unset;box-sizing:border-box;cursor:pointer;padding:10px 12px;border-radius:10px;display:grid;grid-template-columns:34px minmax(0,1fr);gap:10px;align-items:center;min-height:52px;transition:background var(--t)}
+.art-list button:hover{background:var(--surface-2)}
+.art-list button:focus-visible{outline:2px solid var(--accent)}
+.art-list button[aria-current="true"]{background:var(--accent-soft)}
+.avatar{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font:700 13px var(--f-brand);background:var(--surface-2);border:1px solid var(--line);color:var(--accent)}
+.art-list .n{font-weight:700;display:flex;gap:6px;align-items:center;min-width:0}
+.art-list .n span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.art-list .m{font:11.5px var(--f-mono);color:var(--muted)}
+.empty{color:var(--muted);font-size:14px;padding:12px 0}
+textarea.pill{min-height:400px;font:14.5px/1.65 var(--f-body)}
+.cmp{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+@media (max-width:720px){.cmp{grid-template-columns:minmax(0,1fr)}}
+.badge{font:600 10.5px var(--f-mono);text-transform:uppercase;letter-spacing:.08em;padding:3px 8px;border-radius:6px;background:var(--accent-soft);color:var(--accent);white-space:nowrap}
+.src a{color:var(--accent);word-break:break-all}
+.src{font-size:13px;display:grid;gap:4px;margin:8px 0 0;padding-left:20px}
+.proposal{border:1px solid var(--accent-line);background:var(--accent-soft);border-radius:var(--r);padding:16px;display:grid;gap:12px}
+
+/* ---------- historia ---------- */
+table.hist{width:100%;border-collapse:collapse;font-size:14px}
+table.hist th{text-align:left;font:500 11px var(--f-mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:10px;border-bottom:1px solid var(--line)}
+table.hist td{padding:12px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+table.hist tbody tr{cursor:pointer;transition:background var(--t)}
+table.hist tbody tr:hover td{background:var(--surface-2)}
+.tbl-wrap{overflow-x:auto}
+.ver{border:1px solid var(--line);border-radius:var(--r-sm);padding:12px 14px;font-size:14px;display:grid;gap:6px;background:var(--surface-2)}
+.ver .m{font:11.5px var(--f-mono);color:var(--muted)}
+.sec-title{display:flex;align-items:center;gap:10px}
+.sec-title .ico{width:32px;height:32px;border-radius:9px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}ol.steps li.active .dot::before{animation:none;border-color:var(--accent)}}
+.framed-warn{margin-top:20px;border:1px solid var(--warn);background:color-mix(in srgb,var(--warn) 10%,transparent);border-radius:var(--r);padding:14px 16px;font-size:14px}
+.framed-warn code{font:12.5px var(--f-mono)}
+</style>
+</head>
+<body>
+<header class="top"><div class="top-in">
+  <a class="brand" href="#" aria-label="Soundvice pitchLAB">
+    <span class="brand-mark" aria-hidden="true"><span><i style="height:6px"></i><i style="height:14px"></i><i style="height:9px"></i><i style="height:16px"></i><i style="height:5px"></i></span></span>
+    <span class="brand-text"><b>Soundvice</b><em>pitch<strong>LAB</strong></em></span>
+  </a>
+  <nav class="tabs" role="tablist" aria-label="Sekcje">
+    <button role="tab" data-tab="run" aria-selected="true"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 10v3M6 6v11M10 3v18M14 8v7M18 5v13M22 10v3"/></svg><span class="lab">Analiza i pitch</span></button>
+    <button role="tab" data-tab="artists" aria-selected="false"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span class="lab">Artyści</span></button>
+    <button role="tab" data-tab="history" aria-selected="false"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span class="lab">Historia</span></button>
+    <button role="tab" data-tab="rules" aria-selected="false"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg><span class="lab">Zasady</span></button>
+    <button role="tab" data-tab="settings" aria-selected="false"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg><span class="lab">Ustawienia</span></button>
+  </nav>
+  <div class="status-pill" id="statusPill"></div>
+</div></header>
+
+<main class="wrap">
+<div class="framed-warn" id="framedWarn" hidden><b>Otwórz pitchLAB w przeglądarce.</b> Ten podgląd blokuje połączenia z Gemini. Pobierz plik <code>soundvice-pitchlab.html</code> i otwórz go dwuklikiem w Chrome.</div>
+
+<!-- ============ ANALIZA ============ -->
+<section class="view" data-view="run">
+  <div class="view-head">
+    <div class="eyebrow"><span class="flow">Utwór <i>→</i> odsłuch <i>→</i> research <i>→</i> pitch</span></div>
+    <h1>Nowy pitch do Spotify</h1>
+    <p class="lede">Wgraj master, podaj artystę i kontekst kampanii. Gemini odsłucha utwór, a jeśli artysta nie ma jeszcze pigułki, zrobi research i ją założy. Pitch powstaje z pigułki, Twoich notatek i analizy.</p>
+  </div>
+  <div class="grid-2">
+    <div class="panel">
+      <div class="drop" id="drop" tabindex="0" role="button" aria-label="Wybierz plik audio">
+        <span class="ico"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5M12 3v12"/></svg></span>
+        <strong>Upuść master albo kliknij</strong>
+        <span class="hint">MP3, WAV, FLAC, M4A, OGG · duże pliki idą przez Files API</span>
+      </div>
+      <div class="deck" id="deck" hidden>
+        <div class="deck-top">
+          <button class="play" id="playBtn" aria-label="Odtwórz"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path id="playIco" d="M7 4v16l13-8z"/></svg></button>
+          <div class="deck-meta"><b id="deckName"></b><span class="file-meta" id="fileMeta"></span></div>
+          <button class="swap" id="swapBtn">Zmień plik</button>
+        </div>
+        <div class="wave" id="wave" title="Kliknij, żeby przewinąć"><canvas id="waveCv" aria-label="Przebieg utworu"></canvas></div>
+      </div>
+      <input type="file" id="fileIn" accept="audio/*,.flac,.wav,.mp3,.m4a,.aac,.ogg" hidden>
+      <audio id="player" preload="metadata" hidden></audio>
+      <div class="row">
+        <div class="field"><label for="fTitle">Tytuł utworu</label><input type="text" id="fTitle" placeholder="np. RETRO"></div>
+        <div class="field"><label for="fArtist">Artysta</label><input type="text" id="fArtist" list="artistOpts" placeholder="Pseudonim"><datalist id="artistOpts"></datalist></div>
+      </div>
+      <div class="row">
+        <div class="field"><label for="fFeat">Featuring / producent</label><input type="text" id="fFeat" placeholder="opcjonalnie"></div>
+        <div class="field"><label for="fDate">Data premiery</label><input type="date" id="fDate"></div>
+      </div>
+      <div class="field">
+        <label for="fCtx">Kontekst kampanii</label>
+        <textarea id="fCtx" placeholder="Teledysk, kampania TikTok/IG, konkurs UGC, livestream premierowy, wsparcie influencerów, trasa, album, którego singiel jest częścią…"></textarea>
+        <span class="hint">Konkrety z planu marketingowego — redakcja Spotify je czyta.</span>
+      </div>
+      <div class="field">
+        <label for="fLyrics">Tekst lub opis tekstu</label>
+        <textarea id="fLyrics" placeholder="Opcjonalnie: wklej tekst albo napisz w dwóch zdaniach, o czym jest numer."></textarea>
+      </div>
+      <label class="check"><input type="checkbox" id="fForceResearch"> <span>Odśwież research artysty, nawet jeśli ma pigułkę<br><span class="hint">Wynik trafi jako propozycja — Twoja pigułka się nie zmieni.</span></span></label>
+      <div class="row">
+        <button class="btn primary big" id="runBtn"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/></svg>Analizuj i napisz pitch</button>
+        <button class="btn ghost" id="stopBtn" hidden><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>Zatrzymaj</button>
+      </div>
+      <ol class="steps" id="steps" hidden></ol>
+      <div class="err-box" id="runErr" hidden></div>
+    </div>
+
+    <div class="panel sticky" id="resultPanel">
+      <div id="resultEmpty" class="empty-state">
+        <div><div class="eyebrow">Wynik</div><h2 style="margin-top:6px">Tu pojawi się pitch</h2></div>
+        <ul class="preview-list">
+          <li><span class="pi"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/></svg></span><div><b>Pitch z miernikiem 500 znaków</b><span class="hint">Edytowalny, z poprawkami wg Twoich uwag i historią wersji.</span></div></li>
+          <li><span class="pi"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span><div><b>Pola Spotify for Artists</b><span class="hint">Gatunki, nastroje, style, instrumenty, język wokalu.</span></div></li>
+          <li><span class="pi"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg></span><div><b>Analiza odsłuchu</b><span class="hint">BPM, tonacja, produkcja, struktura i momenty z timestampami.</span></div></li>
+          <li><span class="pi"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 20.5a7 7 0 0 1-9.9-9.9l9.9-9.9a7 7 0 0 1 9.9 9.9z"/><path d="M8.5 8.5l7 7"/></svg></span><div><b>Pigułka artysty</b><span class="hint">Zmienisz ją w karcie Artyści i wygenerujesz pitch ponownie bez odsłuchu.</span></div></li>
+        </ul>
+      </div>
+      <div id="result" hidden></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ARTYŚCI ============ -->
+<section class="view" data-view="artists" hidden>
+  <div class="view-head">
+    <div class="eyebrow">Pamięć</div>
+    <h1>Pigułki artystów</h1>
+    <p class="lede">Pigułka to skrót wiedzy o artyście używany w każdym pitchu. Research jej nie nadpisuje — nowe ustalenia przychodzą jako propozycja do przejęcia. Notatki managera mają najwyższy priorytet i nigdy nie są zmieniane automatycznie.</p>
+  </div>
+  <div class="grid-art">
+    <div class="panel">
+      <div class="row"><input type="text" id="newArtist" placeholder="Dodaj artystę"><button class="btn" id="addArtistBtn">Dodaj</button></div>
+      <div class="art-list" id="artList"></div>
+    </div>
+    <div class="panel" id="artEditor"><p class="empty">Wybierz artystę z listy albo dodaj nowego. Artyści dopisują się też sami po pierwszej analizie utworu.</p></div>
+  </div>
+</section>
+
+<!-- ============ HISTORIA ============ -->
+<section class="view" data-view="history" hidden>
+  <div class="view-head">
+    <div class="eyebrow">Archiwum</div>
+    <h1>Historia pitchy</h1>
+  </div>
+  <div class="panel"><div class="tbl-wrap"><table class="hist"><thead><tr><th>Utwór</th><th>Artysta</th><th>Premiera</th><th>Gatunek</th><th>Znaki</th><th>Utworzono</th></tr></thead><tbody id="histBody"></tbody></table></div><p class="empty" id="histEmpty">Jeszcze nic. Pierwszy pitch pojawi się tu po analizie.</p></div>
+</section>
+
+<!-- ============ ZASADY ============ -->
+<section class="view" data-view="rules" hidden>
+  <div class="view-head">
+    <div class="eyebrow">Instrukcje dla generatora</div>
+    <h1>Zasady pitchu</h1>
+    <p class="lede">To, co tu napiszesz, trafia dosłownie do modelu przy każdym pitchu. Wzorcowe pitche (zatwierdzone przez Ciebie) działają jak przykłady stylu.</p>
+  </div>
+  <div class="grid-2">
+    <div class="panel">
+      <div class="field"><label for="rulesTxt">Zasady</label><textarea id="rulesTxt" class="mono" style="min-height:460px"></textarea></div>
+      <div class="row"><button class="btn primary" id="saveRules">Zapisz zasady</button><button class="btn ghost" id="resetRules">Przywróć domyślne</button></div>
+    </div>
+    <div class="panel">
+      <div class="field"><label for="examplesTxt">Wzorcowe pitche</label><textarea id="examplesTxt" style="min-height:300px" placeholder="Wklej 1–5 pitchy, które przeszły albo które uważasz za wzorcowe. Oddziel je linią ---"></textarea><span class="hint">Przycisk „Dodaj do wzorców” przy pitchu dopisuje go tutaj.</span></div>
+      <div class="field"><label for="pitchLang">Język pitchu</label><select id="pitchLang"><option value="en">angielski (zalecany dla redakcji Spotify)</option><option value="pl">polski</option></select></div>
+      <div class="row"><button class="btn primary" id="saveExamples">Zapisz</button></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ USTAWIENIA ============ -->
+<section class="view" data-view="settings" hidden>
+  <div class="view-head">
+    <div class="eyebrow">Połączenia</div>
+    <h1>Ustawienia</h1>
+    <p class="lede">Klucze zostają tylko w tej przeglądarce na tym komputerze. Aplikacja łączy się bezpośrednio z API Google (i opcjonalnie Anthropic), bez żadnego serwera pośredniego.</p>
+  </div>
+  <div class="grid-2">
+    <div class="panel">
+      <div class="sec-title"><span class="ico"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg></span><h2>Gemini — odsłuch i research</h2></div>
+      <div class="field"><label for="gKey">Klucz API Gemini</label><input type="password" id="gKey" autocomplete="off" placeholder="AIza…"><span class="hint">Z Google AI Studio → Get API key.</span></div>
+      <div class="row"><button class="btn" id="loadModels">Pobierz listę modeli</button><span class="hint" id="modelsHint"></span></div>
+      <div class="field"><label for="gModel">Model do odsłuchu i analizy</label><select id="gModel"></select></div>
+      <div class="field"><label for="gModelR">Model do researchu (Google Search)</label><select id="gModelR"></select></div>
+      <div class="sep"></div><div class="sec-title"><span class="ico"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/></svg></span><h2>Silnik pitchu</h2></div>
+      <div class="field"><label for="engine">Kto pisze pitch</label><select id="engine"><option value="gemini">Gemini (ten sam klucz)</option><option value="claude">Claude (klucz Anthropic API)</option></select></div>
+      <div id="claudeBox" class="field" hidden>
+        <label for="aKey">Klucz Anthropic API</label><input type="password" id="aKey" autocomplete="off" placeholder="sk-ant-…">
+        <label for="aModel">Model Claude</label><input type="text" id="aModel" value="claude-opus-5-5">
+        <span class="hint">Np. claude-opus-5-5 albo tańszy claude-sonnet-5-5.</span>
+      </div>
+      <div class="row"><button class="btn primary" id="saveSettings">Zapisz ustawienia</button><button class="btn" id="testConn">Sprawdź połączenie</button></div>
+    </div>
+    <div class="panel">
+      <div class="sec-title"><span class="ico"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg></span><h2>Kopia bazy</h2></div>
+      <p class="hint">Baza (artyści, pigułki, pitche, zasady) jest w pamięci przeglądarki. Eksportuj ją co jakiś czas albo żeby przenieść na inny komputer.</p>
+      <div class="row"><button class="btn" id="exportBtn">Eksportuj JSON</button><button class="btn" id="importBtn">Importuj JSON</button><input type="file" id="importIn" accept="application/json" hidden></div>
+      <details><summary>Strefa niebezpieczna</summary><p class="hint">Usuwa wszystkich artystów, pitche i zasady z tej przeglądarki.</p><div class="row"><button class="btn danger" id="wipeBtn">Wyczyść bazę</button><button class="btn danger" id="wipeConfirm" hidden>Tak, usuń wszystko</button></div></details>
+    </div>
+  </div>
+</section>
+</main>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+"use strict";
+/* ======================= DOMYŚLNE ZASADY ======================= */
+const DEFAULT_RULES = `CEL: pitch do redakcji Spotify (Spotify for Artists → "Pitch a song"). Czyta go redaktor, który ma kilkaset zgłoszeń dziennie.
+
+LIMIT: maksymalnie 500 znaków ze spacjami. Celuj w 380–480. Każde zdanie musi coś wnosić.
+
+JĘZYK: angielski, prosty, rzeczowy, trzecia osoba, czas teraźniejszy. Polskie tytuły, pseudonimy i nazwy własne zostają w oryginale (bez tłumaczenia w nawiasie, chyba że tytuł jest kluczem do zrozumienia numeru).
+
+GATUNEK: precyzyjnie i zgodnie z tym, co faktycznie słychać w analizie. Nazwij podgatunek (np. boom bap z trapowym refrenem, alt-pop, drill, emo rap, hyperpop). Nie podciągaj numeru pod modniejszy gatunek. Hybrydę opisz jako hybrydę.
+
+STRUKTURA (zwykle 4 zdania):
+1. Czym jest utwór: gatunek + o czym jest / emocja, w jednym zdaniu, z haczykiem.
+2. Jeden konkretny detal brzmieniowy (instrument, zabieg produkcyjny, moment w numerze) — taki, który redaktor usłyszy w pierwszych 30 sekundach.
+3. Kontekst artysty: jeden najmocniejszy, ZWERYFIKOWANY fakt (certyfikat ZPAV, liczby, ważny feat, album). Tylko z pigułki lub notatek managera.
+4. Plan promocji: konkretne działania (teledysk, kampania TikTok/IG, konkurs UGC, livestream, wsparcie twórców, trasa) z datami jeśli są.
+
+ZAKAZY:
+- Żadnych propozycji ani nazw playlist.
+- Żadnych superlatywów i hype'u ("best", "viral", "masterpiece", "must-listen", "game-changer").
+- Żadnych emoji, hashtagów, linków, wielkich liter dla emfazy.
+- Nie wymyślaj faktów. Jeśli czegoś nie ma w danych — pomiń. Fakty oznaczone [?] w pigułce traktuj jako niepewne i nie używaj.
+- Nie porównuj do znanych artystów zagranicznych wprost ("for fans of X") chyba, że notatki managera każą.
+
+PRIORYTET ŹRÓDEŁ: notatki managera > kontekst kampanii > pigułka artysty > analiza audio.`;
+
+const IC={"wave": "<path d=\"M2 10v3M6 6v11M10 3v18M14 8v7M18 5v13M22 10v3\"/>", "users": "<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\"/><circle cx=\"9\" cy=\"7\" r=\"4\"/><path d=\"M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75\"/>", "clock": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M12 7v5l3 2\"/>", "doc": "<path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><path d=\"M14 2v6h6M16 13H8M16 17H8M10 9H8\"/>", "sliders": "<path d=\"M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6\"/>", "upload": "<path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"/><path d=\"M17 8l-5-5-5 5M12 3v12\"/>", "spark": "<path d=\"M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z\"/>", "stop": "<rect x=\"6\" y=\"6\" width=\"12\" height=\"12\" rx=\"2\"/>", "headphones": "<path d=\"M3 18v-6a9 9 0 0 1 18 0v6\"/><path d=\"M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z\"/>", "search": "<circle cx=\"11\" cy=\"11\" r=\"7\"/><path d=\"M21 21l-4.3-4.3\"/>", "list": "<path d=\"M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01\"/>", "pill": "<path d=\"M10.5 20.5a7 7 0 0 1-9.9-9.9l9.9-9.9a7 7 0 0 1 9.9 9.9z\"/><path d=\"M8.5 8.5l7 7\"/>"};
+const ic=n=>`<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${IC[n]}</svg>`;
+/* ======================= STAN ======================= */
+const LS = { get(k,d){try{const v=localStorage.getItem("pl_"+k);return v==null?d:v}catch{return d}}, set(k,v){try{localStorage.setItem("pl_"+k,v)}catch{}} };
+let DB = { artists:{}, tracks:[], rules:DEFAULT_RULES, examples:"", lang:"en" };
+let current = { file:null, trackId:null, ctl:null, artistSel:null };
+
+const idb = {
+  open(){return new Promise((res,rej)=>{const r=indexedDB.open("repitch-pitch-lab",1);r.onupgradeneeded=()=>r.result.createObjectStore("kv");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})},
+  async get(k){const d=await this.open();return new Promise((res,rej)=>{const t=d.transaction("kv").objectStore("kv").get(k);t.onsuccess=()=>res(t.result);t.onerror=()=>rej(t.error)})},
+  async set(k,v){const d=await this.open();return new Promise((res,rej)=>{const t=d.transaction("kv","readwrite");t.objectStore("kv").put(v,k);t.oncomplete=()=>res();t.onerror=()=>rej(t.error)})}
+};
+let saveTimer=null;
+function save(){clearTimeout(saveTimer);saveTimer=setTimeout(()=>idb.set("db",DB).catch(e=>toast("Nie udało się zapisać bazy: "+e.message)),250)}
+async function load(){try{const d=await idb.get("db");if(d){DB=Object.assign({artists:{},tracks:[],rules:DEFAULT_RULES,examples:"",lang:"en"},d)}}catch(e){toast("Baza niedostępna w tej przeglądarce — dane nie będą trwałe.")}}
+
+/* ======================= HELPERY ======================= */
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const slug=s=>String(s).toLowerCase().replace(/ł/g,"l").normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"artysta";
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const fmtDate=t=>t?new Date(t).toLocaleString("pl-PL",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}):"—";
+const fmtSize=b=>b>1048576?(b/1048576).toFixed(1)+" MB":(b/1024).toFixed(0)+" KB";
+function toast(msg){const t=$("#toast");t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,3200)}
+function parseJSONLoose(txt){
+  if(txt==null) throw new Error("Pusta odpowiedź modelu");
+  let s=String(txt).trim();
+  const fence=s.match(/```(?:json)?\s*([\s\S]*?)```/i); if(fence) s=fence[1].trim();
+  try{return JSON.parse(s)}catch{}
+  const a=s.indexOf("{"), b=s.lastIndexOf("}");
+  if(a>=0&&b>a){try{return JSON.parse(s.slice(a,b+1))}catch{}}
+  throw new Error("Model nie zwrócił poprawnego JSON:\n"+s.slice(0,400));
+}
+async function copyText(t){try{await navigator.clipboard.writeText(t);toast("Skopiowano")}catch{toast("Nie udało się skopiować — zaznacz tekst ręcznie")}}
+function download(name,text){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type:"application/json"}));a.download=name;document.body.append(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
+
+/* fetch odporny na środowiska, które nie umieją przekazać AbortSignal */
+async function xfetch(url,opts={}){
+  try{return await fetch(url,opts)}
+  catch(e){
+    if(opts.signal&&/clone/i.test(String(e&&e.message))){const {signal,...rest}=opts;return await fetch(url,rest)}
+    if(e&&e.name==="TypeError"&&isFramed()) throw new Error("Połączenie zablokowane przez podgląd. Pobierz plik i otwórz go w Chrome (dwuklik na pobranym pliku).");
+    throw e;
+  }
+}
+function isFramed(){try{return window.self!==window.top}catch{return true}}
+/* ======================= GEMINI ======================= */
+const GBASE="https://generativelanguage.googleapis.com";
+function gKey(){const k=LS.get("gkey","");if(!k) throw new Error("Brak klucza Gemini. Wpisz go w Ustawieniach.");return k}
+async function gFetch(url,opts={}){
+  const res=await xfetch(url,{...opts,headers:{"x-goog-api-key":gKey(),...(opts.headers||{})}});
+  if(!res.ok){let m=await res.text();try{m=JSON.parse(m).error.message}catch{}throw new Error(`Gemini ${res.status}: ${m}`)}
+  return res;
+}
+async function gemini(parts,{json=false,search=false,model=null,temperature=0.5,signal}={}){
+  const m=model||LS.get("gmodel","")||"gemini-2.5-pro";
+  const body={contents:[{role:"user",parts}],generationConfig:{temperature}};
+  if(json) body.generationConfig.responseMimeType="application/json";
+  if(search) body.tools=[{google_search:{}}];
+  const res=await gFetch(`${GBASE}/v1beta/models/${encodeURIComponent(m.replace(/^models\//,""))}:generateContent`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),signal});
+  const data=await res.json();
+  const cand=data.candidates?.[0];
+  if(!cand) throw new Error("Gemini nie zwrócił odpowiedzi"+(data.promptFeedback?.blockReason?` (blokada: ${data.promptFeedback.blockReason})`:""));
+  const text=(cand.content?.parts||[]).map(p=>p.text||"").join("");
+  const sources=[];const seen=new Set();
+  for(const c of cand.groundingMetadata?.groundingChunks||[]){if(c.web?.uri&&!seen.has(c.web.uri)){seen.add(c.web.uri);sources.push({title:c.web.title||c.web.uri,uri:c.web.uri})}}
+  return {text,sources,queries:cand.groundingMetadata?.webSearchQueries||[]};
+}
+function readB64(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(",")[1]);r.onerror=()=>rej(r.error);r.readAsDataURL(file)})}
+function mimeOf(file){
+  if(file.type) return file.type==="audio/x-wav"?"audio/wav":file.type;
+  const ext=file.name.split(".").pop().toLowerCase();
+  return ({mp3:"audio/mp3",wav:"audio/wav",flac:"audio/flac",m4a:"audio/aac",aac:"audio/aac",ogg:"audio/ogg",aiff:"audio/aiff",aif:"audio/aiff"})[ext]||"audio/mpeg";
+}
+async function audioPart(file,signal,onMsg){
+  const mime=mimeOf(file);
+  if(file.size<14*1048576){onMsg("wysyłam inline ("+fmtSize(file.size)+")");return {inline_data:{mime_type:mime,data:await readB64(file)}}}
+  onMsg("wgrywam przez Files API ("+fmtSize(file.size)+")…");
+  const start=await gFetch(`${GBASE}/upload/v1beta/files`,{method:"POST",signal,headers:{"X-Goog-Upload-Protocol":"resumable","X-Goog-Upload-Command":"start","X-Goog-Upload-Header-Content-Length":String(file.size),"X-Goog-Upload-Header-Content-Type":mime,"Content-Type":"application/json"},body:JSON.stringify({file:{display_name:file.name.slice(0,120)}})});
+  const upUrl=start.headers.get("x-goog-upload-url");
+  if(!upUrl) throw new Error("Files API nie zwróciło adresu wysyłki. Zmniejsz plik (np. MP3 320 kbps) i spróbuj ponownie.");
+  const up=await xfetch(upUrl,{method:"POST",signal,headers:{"X-Goog-Upload-Offset":"0","X-Goog-Upload-Command":"upload, finalize","Content-Length":String(file.size)},body:file});
+  if(!up.ok) throw new Error("Wysyłka pliku nie powiodła się: "+up.status);
+  let info=(await up.json()).file;
+  for(let i=0;i<60&&info.state==="PROCESSING";i++){onMsg("Gemini przetwarza plik…");await new Promise(r=>setTimeout(r,2000));info=await (await gFetch(`${GBASE}/v1beta/${info.name}`,{signal})).json()}
+  if(info.state==="FAILED") throw new Error("Gemini nie przetworzył pliku audio.");
+  return {file_data:{mime_type:info.mimeType||mime,file_uri:info.uri}};
+}
+
+/* ======================= CLAUDE (opcjonalnie) ======================= */
+async function claudeCall(prompt,signal){
+  const key=LS.get("akey","");if(!key) throw new Error("Brak klucza Anthropic w Ustawieniach.");
+  const res=await xfetch("https://api.anthropic.com/v1/messages",{method:"POST",signal,headers:{"content-type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:LS.get("amodel","claude-opus-5-5"),max_tokens:3000,messages:[{role:"user",content:prompt}]})});
+  if(!res.ok){let m=await res.text();try{m=JSON.parse(m).error.message}catch{}throw new Error(`Claude ${res.status}: ${m}`)}
+  const d=await res.json();return (d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+}
+async function writer(prompt,signal){
+  if(LS.get("engine","gemini")==="claude") return parseJSONLoose(await claudeCall(prompt,signal));
+  return parseJSONLoose((await gemini([{text:prompt}],{json:true,temperature:0.7,signal})).text);
+}
+
+/* ======================= PROMPTY ======================= */
+function analysisPrompt(t){
+  return `Jesteś doświadczonym A&R i inżynierem dźwięku. Uważnie odsłuchaj CAŁY załączony utwór i przeanalizuj go.
+Utwór: "${t.title||"bez tytułu"}" — ${t.artist}${t.feat?` (feat./prod.: ${t.feat})`:""}.
+${t.lyrics?`Tekst / opis od managera:\n${t.lyrics}\n`:""}
+Zasady: opisuj tylko to, co faktycznie słychać. Gatunki podawaj angielskimi nazwami używanymi w branży, możliwie precyzyjnie (podgatunek). Jeśli numer jest hybrydą, nazwij składniki. Timestampy w formacie m:ss. Opisy po polsku.
+Zwróć wyłącznie JSON:
+{
+ "primary_genre": "string",
+ "subgenres": ["string"],
+ "genre_rationale": "1-2 zdania: po czym to słychać",
+ "bpm": number | null,
+ "key": "string | null",
+ "energy": 1-10,
+ "moods": ["angielskie przymiotniki"],
+ "instruments": ["string"],
+ "production_notes": "2-3 zdania o produkcji i miksie",
+ "vocals": {"type":"rap/śpiew/melodyjny rap…","language":"string","delivery":"opis flow / barwy","features":"string | null"},
+ "lyrics_themes": ["string"],
+ "lyrics_summary": "2-3 zdania o czym jest tekst",
+ "hook": "opis refrenu/haczyka",
+ "structure": [{"t":"0:00","section":"intro"}],
+ "standout_moments": [{"t":"0:00","desc":"string"}],
+ "sound_alikes": ["artysta — utwór (dla orientacji, nie do pitchu)"],
+ "explicit_content": true|false,
+ "editorial_angle": "1 zdanie: co w tym numerze jest najciekawsze z perspektywy redaktora playlist"
+}`;
+}
+function researchPrompt(name,a,ctx){
+  return `Przeprowadź pogłębiony research w internecie o polskim artyście muzycznym "${name}".
+${a?.hints?`Wskazówki identyfikacyjne od managera: ${a.hints}\n`:""}${ctx?`Kontekst: aktualny singiel "${ctx.title||""}"${ctx.genre?`, gatunek: ${ctx.genre}`:""}.\n`:""}
+Uwaga na artystów o podobnych pseudonimach — na początku napisz, po czym zidentyfikowałeś właściwą osobę.
+Szukaj i opisz z datami:
+- kim jest: prawdziwe imię (jeśli publiczne), miasto, rok debiutu, wytwórnia/management, kolektyw
+- dyskografia: albumy, EP-ki, najważniejsze single (z rokiem)
+- liczby: miesięczni słuchacze Spotify, najpopularniejsze utwory i ich odsłuchy, YouTube, pozycje OLiS / listy
+- certyfikaty ZPAV (złoto/platyna/diament — który utwór/album, kiedy)
+- nagrody i nominacje (Fryderyki, Popkillery itp.)
+- współprace i featuringi z rozpoznawalnymi artystami, producenci
+- koncerty, trasy, festiwale
+- media: ważne wywiady, recenzje, wzmianki
+- social media: zasięgi (IG, TikTok), wiralowe momenty
+- unikalna historia / narracja artysty, styl, tematyka tekstów
+Każdą liczbę opatrz źródłem i datą. Fakty, których nie da się potwierdzić w co najmniej jednym wiarygodnym źródle, oznacz [?]. Nie zgaduj. Pisz po polsku, w punktach, z nagłówkami.`;
+}
+function pillPrompt(name,dossier,oldPill){
+  return `Na podstawie dossier z researchu przygotuj PIGUŁKĘ o artyście "${name}" — zwięzłą notatkę roboczą dla managera piszącego pitche do Spotify. Po polsku, maks. ~1800 znaków, tylko fakty z dossier. Zachowaj oznaczenia [?] przy niepewnych faktach.
+${oldPill?`Obecna pigułka (zachowaj z niej to, co nadal aktualne, popraw to, co dossier aktualizuje):\n${oldPill}\n`:""}
+Użyj dokładnie tych sekcji:
+KIM JEST:
+BRZMIENIE I TEMATY:
+KAMIENIE MILOWE (liczby, certyfikaty, nagrody — z datą):
+WYDAWNICTWA:
+WSPÓŁPRACE:
+NARRACJA DO PITCHU (1-2 najmocniejsze kąty):
+NIEPEWNE / NIE UŻYWAĆ:
+
+DOSSIER:
+${dossier}
+
+Zwróć sam tekst pigułki, bez wstępu.`;
+}
+function pitchPrompt(t,a,analysis,extra){
+  const lang=DB.lang==="pl"?"Polish":"English";
+  return `You are a senior music marketer at Repitch (Polish label & management) writing a Spotify for Artists editorial pitch.
+
+=== HOUSE RULES (follow strictly; written by the manager in Polish) ===
+${DB.rules}
+
+${DB.examples.trim()?`=== APPROVED EXAMPLE PITCHES (match tone and density, never copy facts) ===\n${DB.examples}\n`:""}
+=== TRACK ===
+Title: ${t.title||"—"}
+Artist: ${t.artist}${t.feat?`\nFeaturing / producer: ${t.feat}`:""}
+Release date: ${t.releaseDate||"—"}
+
+=== MANAGER NOTES (highest priority) ===
+${a?.notes?.trim()||"—"}
+
+=== CAMPAIGN CONTEXT ===
+${t.context?.trim()||"—"}
+
+=== ARTIST PILL (verified facts; ignore anything marked [?]) ===
+${a?.pill?.trim()||"— (no pill: do not state any artist facts beyond the name)"}
+
+=== AUDIO ANALYSIS (what is actually audible) ===
+${JSON.stringify(analysis,null,1)}
+
+${extra||""}
+Write the pitch in ${lang}. HARD LIMIT: the "pitch" string must be at most 500 characters including spaces; aim for 380-480.
+Also propose Spotify for Artists form fields based on the audio (use Spotify's usual wording; max 3 genres, max 3 moods).
+Return ONLY JSON:
+{"pitch":"string","pitch_pl":"Polish translation for the manager (if pitch is already Polish, repeat it)","form":{"genres":["max 3"],"moods":["max 3"],"styles":["e.g. Pop, Rap, Electronic subtypes"],"instruments":["string"],"culture":"string or empty","song_type":"e.g. Original / Remix / Acoustic","vocal_language":"string"},"angle":"one sentence: which angle you chose and why","facts_used":["each artist/campaign fact used and its source: pill / notes / context / analysis"]}`;
+}
+
+/* ======================= PIPELINE ======================= */
+const STEP_DEFS=[["audio","Przygotowanie pliku"],["listen","Gemini słucha i analizuje"],["research","Research o artyście"],["pill","Pigułka artysty"],["pitch","Pitch Spotify"]];
+function stepsInit(){const ol=$("#steps");ol.hidden=false;ol.innerHTML=STEP_DEFS.map(([k,l],i)=>`<li data-k="${k}"><span class="dot">${i+1}</span><div><div class="t">${l}</div><div class="sub"></div></div></li>`).join("")}
+function step(k,state,sub){const li=$(`#steps li[data-k="${k}"]`);if(!li)return;li.className=state||"";if(sub!=null)li.querySelector(".sub").textContent=sub}
+function ensureArtist(name){
+  const id=slug(name);
+  if(!DB.artists[id]) DB.artists[id]={id,name:name.trim(),pill:"",notes:"",hints:"",dossier:"",sources:[],proposal:null,createdAt:Date.now(),updatedAt:Date.now(),researchedAt:null};
+  return DB.artists[id];
+}
+
+async function doResearch(a,ctx,signal,onStep){
+  onStep?.("research","active","szukam w Google…");
+  const r=await gemini([{text:researchPrompt(a.name,a,ctx)}],{search:true,model:LS.get("gmodelr","")||LS.get("gmodel",""),temperature:0.3,signal});
+  onStep?.("research","done",`${r.sources.length} źródeł${r.queries.length?" · zapytania: "+r.queries.slice(0,4).join(", "):""}`);
+  onStep?.("pill","active","streszczam dossier…");
+  const pill=(await gemini([{text:pillPrompt(a.name,r.text,a.pill)}],{temperature:0.3,signal})).text.trim();
+  return {dossier:r.text,sources:r.sources,pill};
+}
+
+async function run(){
+  const file=current.file, title=$("#fTitle").value.trim(), artist=$("#fArtist").value.trim();
+  $("#runErr").hidden=true;
+  if(!file){toast("Najpierw wybierz plik audio");return}
+  if(!artist){toast("Wpisz artystę");$("#fArtist").focus();return}
+  try{gKey()}catch(e){toast(e.message);switchTab("settings");return}
+  const ctl=new AbortController();current.ctl=ctl;const signal=ctl.signal;
+  $("#runBtn").disabled=true;$("#stopBtn").hidden=false;stepsInit();
+  const t={id:uid(),title,artist,artistId:slug(artist),feat:$("#fFeat").value.trim(),releaseDate:$("#fDate").value,context:$("#fCtx").value,lyrics:$("#fLyrics").value,fileName:file.name,createdAt:Date.now(),analysis:null,pitch:null,versions:[]};
+  try{
+    step("audio","active");
+    const part=await audioPart(file,signal,m=>step("audio","active",m));
+    step("audio","done",file.name);
+    step("listen","active","to może potrwać 20–90 s");
+    const an=parseJSONLoose((await gemini([part,{text:analysisPrompt(t)}],{json:true,temperature:0.2,signal})).text);
+    t.analysis=an;
+    step("listen","done",[an.primary_genre,(an.subgenres||[]).join(", "),an.bpm?an.bpm+" BPM":""].filter(Boolean).join(" · "));
+    const a=ensureArtist(artist);
+    const force=$("#fForceResearch").checked;
+    if(!a.pill||force){
+      const r=await doResearch(a,{title,genre:an.primary_genre},signal,step);
+      if(!a.pill){Object.assign(a,{pill:r.pill,dossier:r.dossier,sources:r.sources,researchedAt:Date.now(),updatedAt:Date.now()});step("pill","done","nowa pigułka zapisana — możesz ją edytować w karcie Artyści")}
+      else{a.proposal={pill:r.pill,dossier:r.dossier,sources:r.sources,at:Date.now()};step("pill","done","propozycja aktualizacji czeka w karcie Artyści (Twoja pigułka bez zmian)")}
+    }else{step("research","skip","pigułka istnieje — używam jej");step("pill","done","z pamięci")}
+    save();
+    step("pitch","active",LS.get("engine","gemini")==="claude"?"pisze Claude":"pisze Gemini");
+    await makePitch(t,signal);
+    step("pitch","done",t.pitch.pitch.length+" znaków");
+    DB.tracks.unshift(t);save();current.trackId=t.id;renderResult();renderHistory();renderArtistOpts();
+  }catch(e){
+    if(e.name==="AbortError"){toast("Zatrzymano")}else{const li=$("#steps li.active");if(li)li.className="err";$("#runErr").textContent=e.message;$("#runErr").hidden=false}
+    if(t.analysis){DB.tracks.unshift(t);save();current.trackId=t.id;renderResult();renderHistory()}
+  }finally{$("#runBtn").disabled=false;$("#stopBtn").hidden=true;current.ctl=null}
+}
+
+async function makePitch(t,signal,extra){
+  const a=DB.artists[t.artistId];
+  let p=await writer(pitchPrompt(t,a,t.analysis,extra),signal);
+  if(!p?.pitch) throw new Error("Model nie zwrócił pitchu.");
+  if(p.pitch.length>500){
+    const fix=await writer(`Shorten this Spotify editorial pitch to at most 480 characters including spaces. Keep the genre framing, the strongest fact and the promo plan. Do not add anything new. Return ONLY JSON {"pitch":"...","pitch_pl":"..."}\n\n${p.pitch}`,signal);
+    if(fix?.pitch){p.pitch=fix.pitch;if(fix.pitch_pl)p.pitch_pl=fix.pitch_pl}
+  }
+  p.at=Date.now();p.engine=LS.get("engine","gemini");
+  if(t.pitch) t.versions.unshift(t.pitch);
+  t.pitch=p;
+}
+
+/* ======================= WYNIK ======================= */
+function meter(n){let h="";for(let i=0;i<25;i++){const lim=(i+1)*20;const on=n>=lim-19;h+=`<i class="${on?"on":""}${on&&lim>440?" hot":""}${on&&n>500?" over":""}"></i>`}return h}
+function renderResult(){
+  const t=DB.tracks.find(x=>x.id===current.trackId);
+  if(!t){$("#result").hidden=true;$("#resultEmpty").hidden=false;return}
+  $("#resultEmpty").hidden=true;const R=$("#result");R.hidden=false;
+  const an=t.analysis||{}, p=t.pitch, a=DB.artists[t.artistId];
+  const chips=arr=>(arr||[]).map(x=>`<span class="chip">${esc(x)}</span>`).join("")||'<span class="hint">—</span>';
+  R.innerHTML=`
+  <div class="result-head">
+    <div><div class="eyebrow">${esc(t.artist)}${t.releaseDate?" · premiera "+esc(t.releaseDate):""}</div><h2 style="margin-top:6px">${esc(t.title||t.fileName)}</h2></div>
+    ${a?.proposal?`<span class="badge">nowa propozycja pigułki</span>`:""}
+  </div>
+  ${p?`
+  <div class="pitch-box field">
+    <label for="pitchTxt">Pitch ${DB.lang==="pl"?"(PL)":"(EN)"}</label>
+    <textarea id="pitchTxt">${esc(p.pitch)}</textarea>
+    <div class="meter" id="meter" aria-hidden="true">${meter(p.pitch.length)}</div><div class="meter-scale" aria-hidden="true"><span>0</span><span>100</span><span>200</span><span>300</span><span>400</span><span>500</span></div>
+    <div class="row" style="justify-content:space-between"><span class="count" id="countLbl"></span><span class="hint">${p.engine==="claude"?"Claude":"Gemini"} · ${fmtDate(p.at)}</span></div>
+  </div>
+  <div class="row">
+    <button class="btn primary" id="copyPitch">${ic("doc")}Kopiuj pitch</button>
+    <button class="btn" id="savePitch">Zapisz moją edycję</button>
+    <button class="btn" id="regenPitch">${ic("spark")}Nowa wersja</button>
+    <button class="btn ghost" id="toExamples">Dodaj do wzorców</button>
+  </div>
+  <div class="field"><label for="feedback">Popraw wg uwag</label><div class="row"><input type="text" id="feedback" placeholder="np. mocniej o teledysku, bez liczb, krócej pierwsze zdanie" style="flex:1 1 240px"><button class="btn" id="revise">Popraw</button></div></div>
+  <details open><summary>Tłumaczenie robocze (PL)</summary><p>${esc(p.pitch_pl||"—")}</p>${p.angle?`<p class="hint">Kąt: ${esc(p.angle)}</p>`:""}</details>
+  <details open><summary>Pola formularza Spotify for Artists</summary>
+    <dl class="kv" style="margin-top:10px">
+      <dt>Gatunki</dt><dd><div class="chips acc">${chips(p.form?.genres)}</div></dd>
+      <dt>Nastroje</dt><dd><div class="chips acc">${chips(p.form?.moods)}</div></dd>
+      <dt>Style</dt><dd><div class="chips">${chips(p.form?.styles)}</div></dd>
+      <dt>Instrumenty</dt><dd><div class="chips">${chips(p.form?.instruments)}</div></dd>
+      <dt>Kultura</dt><dd>${esc(p.form?.culture||"—")}</dd>
+      <dt>Typ utworu</dt><dd>${esc(p.form?.song_type||"—")}</dd>
+      <dt>Język wokalu</dt><dd>${esc(p.form?.vocal_language||"—")}</dd>
+    </dl></details>
+  ${p.facts_used?.length?`<details><summary>Użyte fakty (do weryfikacji)</summary><ul>${p.facts_used.map(f=>`<li>${esc(f)}</li>`).join("")}</ul></details>`:""}
+  `:`<p class="hint">Analiza jest gotowa, ale pitch się nie wygenerował.</p><div class="row"><button class="btn primary" id="regenPitch">${ic("spark")}Wygeneruj pitch</button></div>`}
+  <details><summary>Analiza odsłuchu</summary>
+    <dl class="kv" style="margin-top:10px">
+      <dt>Gatunek</dt><dd><b>${esc(an.primary_genre||"—")}</b>${an.subgenres?.length?" · "+esc(an.subgenres.join(", ")):""}<div class="hint">${esc(an.genre_rationale||"")}</div></dd>
+      <dt>Tempo / tonacja</dt><dd>${esc(an.bpm??"—")} BPM · ${esc(an.key||"—")} · energia ${esc(an.energy??"—")}/10</dd>
+      <dt>Nastroje</dt><dd><div class="chips">${chips(an.moods)}</div></dd>
+      <dt>Instrumenty</dt><dd><div class="chips">${chips(an.instruments)}</div></dd>
+      <dt>Produkcja</dt><dd>${esc(an.production_notes||"—")}</dd>
+      <dt>Wokal</dt><dd>${esc([an.vocals?.type,an.vocals?.language,an.vocals?.delivery].filter(Boolean).join(" · ")||"—")}</dd>
+      <dt>Tekst</dt><dd>${esc(an.lyrics_summary||"—")}<div class="chips" style="margin-top:6px">${chips(an.lyrics_themes)}</div></dd>
+      <dt>Hook</dt><dd>${esc(an.hook||"—")}</dd>
+      <dt>Struktura</dt><dd>${(an.structure||[]).map(s=>`<span class="ts">${esc(s.t)}</span> ${esc(s.section)}`).join(" · ")||"—"}</dd>
+      <dt>Momenty</dt><dd>${(an.standout_moments||[]).map(s=>`<div><span class="ts">${esc(s.t)}</span> ${esc(s.desc)}</div>`).join("")||"—"}</dd>
+      <dt>Brzmi jak</dt><dd>${esc((an.sound_alikes||[]).join("; ")||"—")}</dd>
+      <dt>Kąt redakcyjny</dt><dd>${esc(an.editorial_angle||"—")}</dd>
+    </dl></details>
+  ${t.versions.length?`<details><summary>Poprzednie wersje (${t.versions.length})</summary><div style="display:grid;gap:8px;margin-top:10px">${t.versions.map((v,i)=>`<div class="ver"><div class="m">${fmtDate(v.at)} · ${v.pitch.length} znaków${v.manual?" · edycja ręczna":""}</div><div>${esc(v.pitch)}</div><div><button class="btn ghost" data-restore="${i}">Przywróć</button></div></div>`).join("")}</div></details>`:""}
+  <details><summary>Kontekst użyty do pitchu</summary><p class="hint">${esc(t.context||"brak kontekstu kampanii")}</p><p><button class="btn ghost" id="goArtist">Otwórz pigułkę: ${esc(t.artist)}</button></p></details>`;
+  bindResult(t);
+}
+function updateCount(){const v=$("#pitchTxt").value;$("#meter").innerHTML=meter(v.length);const c=$("#countLbl");c.textContent=`${v.length} / 500 znaków`;c.className="count"+(v.length>500?" over":"")}
+async function guardedPitch(t,extra,btn){
+  const ctl=new AbortController();btn.disabled=true;const old=btn.textContent;btn.textContent="Piszę…";
+  try{await makePitch(t,ctl.signal,extra);save();renderResult();renderHistory();toast("Gotowe")}
+  catch(e){toast(e.message.slice(0,200))}finally{btn.disabled=false;btn.textContent=old}
+}
+function bindResult(t){
+  const pt=$("#pitchTxt");
+  if(pt){pt.addEventListener("input",updateCount);updateCount();
+    $("#copyPitch").onclick=()=>copyText(pt.value);
+    $("#savePitch").onclick=()=>{if(pt.value===t.pitch.pitch){toast("Bez zmian");return}t.versions.unshift(t.pitch);t.pitch={...t.pitch,pitch:pt.value,at:Date.now(),manual:true};save();renderResult();renderHistory();toast("Zapisano edycję")};
+    $("#toExamples").onclick=()=>{DB.examples=(DB.examples.trim()?DB.examples.trim()+"\n---\n":"")+pt.value;save();$("#examplesTxt").value=DB.examples;toast("Dodano do wzorców")};
+    $("#revise").onclick=e=>{const fb=$("#feedback").value.trim();if(!fb){toast("Wpisz uwagi");return}guardedPitch(t,`=== REVISION REQUEST ===\nCurrent pitch:\n${pt.value}\nManager feedback (apply it, keep everything else that works):\n${fb}\n`,e.currentTarget)};
+  }
+  const rg=$("#regenPitch");if(rg) rg.onclick=e=>guardedPitch(t,t.pitch?`=== NEW VERSION ===\nWrite a clearly different take than this previous version (different opening and angle):\n${t.pitch.pitch}\n`:"",e.currentTarget);
+  $$("[data-restore]").forEach(b=>b.onclick=()=>{const i=+b.dataset.restore;const v=t.versions.splice(i,1)[0];t.versions.unshift(t.pitch);t.pitch=v;save();renderResult();toast("Przywrócono")});
+  const ga=$("#goArtist");if(ga) ga.onclick=()=>{current.artistSel=t.artistId;switchTab("artists")};
+}
+
+/* ======================= ARTYŚCI ======================= */
+function renderArtists(){
+  const list=Object.values(DB.artists).sort((a,b)=>a.name.localeCompare(b.name,"pl"));
+  $("#artList").innerHTML=list.length?list.map(a=>`<button data-id="${a.id}" aria-current="${a.id===current.artistSel}"><span class="avatar" aria-hidden="true">${esc(a.name.trim().charAt(0).toUpperCase())}</span><span style="min-width:0;display:grid"><span class="n"><span>${esc(a.name)}</span>${a.proposal?'<span class="badge">nowe</span>':""}</span><span class="m">${a.pill?"pigułka · "+fmtDate(a.updatedAt):"brak pigułki"}</span></span></button>`).join(""):'<p class="empty">Brak artystów.</p>';
+  $$("#artList button").forEach(b=>b.onclick=()=>{current.artistSel=b.dataset.id;renderArtists()});
+  renderArtistEditor();
+}
+function renderArtistEditor(){
+  const a=DB.artists[current.artistSel], E=$("#artEditor");
+  if(!a){E.innerHTML='<p class="empty">Wybierz artystę z listy albo dodaj nowego. Artyści dopisują się też sami po pierwszej analizie utworu.</p>';return}
+  const tracks=DB.tracks.filter(t=>t.artistId===a.id);
+  E.innerHTML=`
+  <div class="panel-h"><div class="sec-title"><span class="avatar" aria-hidden="true">${esc(a.name.trim().charAt(0).toUpperCase())}</span><div><div class="eyebrow">Artysta</div><h2>${esc(a.name)}</h2></div></div>
+    <div class="row"><button class="btn" id="aResearch">${ic("search")}${a.pill?"Odśwież research":"Zrób research"}</button><button class="btn ghost danger" id="aDel">Usuń</button><button class="btn danger" id="aDelOk" hidden>Potwierdź usunięcie</button></div></div>
+  ${a.proposal?`<div class="proposal">
+    <div class="row" style="justify-content:space-between"><h3>Propozycja aktualizacji z researchu · ${fmtDate(a.proposal.at)}</h3>
+    <div class="row"><button class="btn primary" id="pAccept">Zastąp pigułkę</button><button class="btn" id="pAppend">Dopisz na końcu</button><button class="btn ghost" id="pReject">Odrzuć</button></div></div>
+    <div class="cmp"><div><div class="lbl">Twoja pigułka</div><pre class="raw">${esc(a.pill)}</pre></div><div><div class="lbl">Propozycja</div><pre class="raw">${esc(a.proposal.pill)}</pre></div></div>
+  </div>`:""}
+  <div class="field"><label for="aPill">Pigułka (edytuj dowolnie — tak będzie widziana w każdym pitchu)</label><textarea id="aPill" class="pill" placeholder="KIM JEST:&#10;BRZMIENIE I TEMATY:&#10;KAMIENIE MILOWE:&#10;WYDAWNICTWA:&#10;WSPÓŁPRACE:&#10;NARRACJA DO PITCHU:&#10;NIEPEWNE / NIE UŻYWAĆ:">${esc(a.pill)}</textarea><span class="hint">Oznacz fakt [?], żeby generator go pominął.</span></div>
+  <div class="field"><label for="aNotes">Notatki managera — najwyższy priorytet</label><textarea id="aNotes" placeholder="Co ZAWSZE / NIGDY nie mówić, preferowane ujęcie, aktualne liczby z S4A, tajne jeszcze informacje, ton…">${esc(a.notes)}</textarea></div>
+  <div class="field"><label for="aHints">Wskazówki do researchu</label><input type="text" id="aHints" value="${esc(a.hints)}" placeholder="np. raper z Opola, nie mylić z DJ-em o tym samym pseudonimie; IG @…"></div>
+  <div class="row"><button class="btn primary" id="aSave">Zapisz</button><span class="hint">Zapisano: ${fmtDate(a.updatedAt)} · research: ${fmtDate(a.researchedAt)}</span></div>
+  <div class="err-box" id="aErr" hidden></div>
+  ${a.sources?.length?`<details><summary>Źródła researchu (${a.sources.length})</summary><ol class="src">${a.sources.map(s=>`<li><a href="${esc(s.uri)}" target="_blank" rel="noopener">${esc(s.title)}</a></li>`).join("")}</ol><p class="hint">Linki Google mogą prowadzić przez przekierowanie vertexaisearch.</p></details>`:""}
+  ${a.dossier?`<details><summary>Pełne dossier z researchu</summary><pre class="raw">${esc(a.dossier)}</pre></details>`:""}
+  ${tracks.length?`<details><summary>Pitche tego artysty (${tracks.length})</summary><div style="display:grid;gap:6px;margin-top:8px">${tracks.map(t=>`<button class="btn ghost" style="justify-self:start" data-open="${t.id}">${esc(t.title||t.fileName)} · ${fmtDate(t.createdAt)}</button>`).join("")}</div></details>`:""}`;
+  $("#aSave").onclick=()=>{a.pill=$("#aPill").value;a.notes=$("#aNotes").value;a.hints=$("#aHints").value;a.updatedAt=Date.now();save();renderArtists();toast("Zapisano pigułkę")};
+  $("#aDel").onclick=()=>{$("#aDelOk").hidden=false};
+  $("#aDelOk").onclick=()=>{delete DB.artists[a.id];current.artistSel=null;save();renderArtists();renderArtistOpts();toast("Usunięto")};
+  $("#aResearch").onclick=async e=>{
+    const b=e.currentTarget;
+    try{gKey()}catch(er){toast(er.message);return}
+    a.pill=$("#aPill").value;a.notes=$("#aNotes").value;a.hints=$("#aHints").value;
+    b.disabled=true;b.textContent="Szukam…";$("#aErr").hidden=true;
+    try{const last=DB.tracks.find(t=>t.artistId===a.id);
+      const r=await doResearch(a,last?{title:last.title,genre:last.analysis?.primary_genre}:null,undefined,(k,s)=>{b.textContent=k==="pill"?"Piszę pigułkę…":"Szukam…"});
+      if(!a.pill.trim()){Object.assign(a,{pill:r.pill,dossier:r.dossier,sources:r.sources,researchedAt:Date.now(),updatedAt:Date.now()})}
+      else{a.proposal={pill:r.pill,dossier:r.dossier,sources:r.sources,at:Date.now()};a.researchedAt=Date.now()}
+      save();renderArtists();toast(a.proposal?"Propozycja gotowa — porównaj obok":"Pigułka gotowa")}
+    catch(er){$("#aErr").textContent=er.message;$("#aErr").hidden=false;b.disabled=false;b.textContent="Spróbuj ponownie"}
+  };
+  if(a.proposal){
+    $("#pAccept").onclick=()=>{Object.assign(a,{pill:a.proposal.pill,dossier:a.proposal.dossier,sources:a.proposal.sources,updatedAt:Date.now(),proposal:null});save();renderArtists();toast("Pigułka zaktualizowana")};
+    $("#pAppend").onclick=()=>{a.pill=a.pill.trim()+"\n\n--- Z researchu "+new Date().toLocaleDateString("pl-PL")+" ---\n"+a.proposal.pill;a.dossier=a.proposal.dossier;a.sources=a.proposal.sources;a.proposal=null;a.updatedAt=Date.now();save();renderArtists();toast("Dopisano — przytnij ręcznie")};
+    $("#pReject").onclick=()=>{a.proposal=null;save();renderArtists();toast("Odrzucono")};
+  }
+  $$("[data-open]").forEach(b=>b.onclick=()=>{current.trackId=b.dataset.open;renderResult();switchTab("run")});
+}
+function renderArtistOpts(){$("#artistOpts").innerHTML=Object.values(DB.artists).map(a=>`<option value="${esc(a.name)}">`).join("")}
+
+/* ======================= HISTORIA ======================= */
+function renderHistory(){
+  $("#histEmpty").hidden=DB.tracks.length>0;
+  $("#histBody").innerHTML=DB.tracks.map(t=>`<tr data-id="${t.id}"><td><b>${esc(t.title||t.fileName)}</b></td><td>${esc(t.artist)}</td><td>${esc(t.releaseDate||"—")}</td><td>${esc(t.analysis?.primary_genre||"—")}</td><td class="count">${t.pitch?.pitch?.length??"—"}</td><td class="hint">${fmtDate(t.createdAt)}</td></tr>`).join("");
+  $$("#histBody tr").forEach(r=>r.onclick=()=>{current.trackId=r.dataset.id;renderResult();switchTab("run")});
+}
+
+/* ======================= USTAWIENIA ======================= */
+function fillModelSelects(models){
+  const cur=LS.get("gmodel",""), curR=LS.get("gmodelr","");
+  const opts=models.length?models:[cur||"gemini-2.5-pro"];
+  const html=v=>opts.map(m=>`<option value="${esc(m)}"${m===v?" selected":""}>${esc(m)}</option>`).join("");
+  $("#gModel").innerHTML=html(cur||opts[0]);$("#gModelR").innerHTML=html(curR||cur||opts[0]);
+}
+async function loadModels(){
+  $("#modelsHint").textContent="pobieram…";
+  try{LS.set("gkey",$("#gKey").value.trim());
+    const res=await gFetch(`${GBASE}/v1beta/models?pageSize=200`);const d=await res.json();
+    const list=(d.models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes("generateContent")).map(m=>m.name.replace(/^models\//,"")).filter(n=>/gemini/i.test(n)&&!/embed|image|tts|live|aqa|robotics|computer-use/i.test(n));
+    const score=n=>(/pro/.test(n)?0:/flash(?!-lite)/.test(n)?1:2)*1000-(parseFloat((n.match(/gemini-(\d+(?:\.\d+)?)/)||[])[1]||0)*10)+(/preview|exp/.test(n)?5:0);
+    list.sort((a,b)=>score(a)-score(b));
+    LS.set("models",JSON.stringify(list));fillModelSelects(list);
+    $("#modelsHint").textContent=list.length+" modeli · na górze najnowsze Pro";
+  }catch(e){$("#modelsHint").textContent=e.message.slice(0,160)}
+}
+function saveSettings(){
+  LS.set("gkey",$("#gKey").value.trim());LS.set("gmodel",$("#gModel").value);LS.set("gmodelr",$("#gModelR").value);
+  LS.set("engine",$("#engine").value);LS.set("akey",$("#aKey").value.trim());LS.set("amodel",$("#aModel").value.trim()||"claude-opus-5-5");
+  renderStatus();toast("Zapisano ustawienia");
+}
+function renderStatus(){
+  const g=!!LS.get("gkey",""), m=LS.get("gmodel","");
+  $("#statusPill").innerHTML=g?`<span class="led"></span>${esc(m||"wybierz model")}`:`<span class="led no"></span>Gemini: brak klucza`;
+}
+
+/* ======================= NAWIGACJA ======================= */
+function switchTab(name){
+  $$("nav.tabs button").forEach(b=>b.setAttribute("aria-selected",String(b.dataset.tab===name)));
+  $$("section.view").forEach(s=>s.hidden=s.dataset.view!==name);
+  if(name==="artists") renderArtists();
+  if(name==="history") renderHistory();
+  window.scrollTo({top:0});
+}
+
+/* ======================= START ======================= */
+/* ---- odtwarzacz + waveform ---- */
+const wave={peaks:null,raf:0};
+const fmtTime=s=>!isFinite(s)?"—":`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,"0")}`;
+function drawWave(){
+  const cv=$("#waveCv");if(!cv||$("#deck").hidden)return;
+  const dpr=window.devicePixelRatio||1,w=cv.clientWidth,h=cv.clientHeight;if(!w)return;
+  cv.width=w*dpr;cv.height=h*dpr;const c=cv.getContext("2d");c.scale(dpr,dpr);
+  const cs=getComputedStyle(document.documentElement),on=cs.getPropertyValue("--wave").trim(),off=cs.getPropertyValue("--wave-dim").trim();
+  const pl=$("#player"),prog=pl.duration?pl.currentTime/pl.duration:0;
+  const bw=3,gap=2,n=Math.floor(w/(bw+gap));
+  const src=wave.peaks;
+  for(let i=0;i<n;i++){
+    let v;
+    if(src){const a=Math.floor(i/n*src.length),b=Math.max(a+1,Math.floor((i+1)/n*src.length));v=0;for(let k=a;k<b;k++)v=Math.max(v,src[k])}
+    else v=.12+.08*Math.sin(i*.7);
+    const bh=Math.max(2,v*(h-8));
+    c.fillStyle=i/n<prog?on:off;
+    c.beginPath();c.roundRect?c.roundRect(i*(bw+gap),(h-bh)/2,bw,bh,1.5):c.rect(i*(bw+gap),(h-bh)/2,bw,bh);c.fill();
+  }
+}
+async function computePeaks(f){
+  wave.peaks=null;drawWave();
+  try{
+    const Ctx=window.AudioContext||window.webkitAudioContext;const ctx=new Ctx();
+    const buf=await ctx.decodeAudioData(await f.arrayBuffer());ctx.close?.();
+    const ch=buf.getChannelData(0),N=600,step=Math.floor(ch.length/N)||1,out=new Float32Array(N);let max=0;
+    for(let i=0;i<N;i++){let m=0;for(let j=i*step,e=Math.min(ch.length,j+step);j<e;j+=8){const a=Math.abs(ch[j]);if(a>m)m=a}out[i]=m;if(m>max)max=m}
+    for(let i=0;i<N;i++)out[i]=max?out[i]/max:0;
+    if(current.file===f){wave.peaks=out;drawWave()}
+  }catch{/* format nieobsługiwany przez przeglądarkę — zostaje placeholder */}
+}
+function setPlayIcon(playing){$("#playIco").setAttribute("d",playing?"M7 4h3.5v16H7zM13.5 4H17v16h-3.5z":"M7 4v16l13-8z");$("#playBtn").setAttribute("aria-label",playing?"Pauza":"Odtwórz")}
+function setFile(f){
+  if(!f) return;
+  current.file=f;
+  const pl=$("#player");pl.pause();if(pl.src) URL.revokeObjectURL(pl.src);pl.src=URL.createObjectURL(f);setPlayIcon(false);
+  $("#drop").hidden=true;$("#deck").hidden=false;
+  $("#deckName").textContent=f.name;$("#fileMeta").textContent=fmtSize(f.size);
+  pl.onloadedmetadata=()=>{$("#fileMeta").textContent=`${fmtTime(pl.duration)} · ${fmtSize(f.size)}`};
+  if(!$("#fTitle").value){$("#fTitle").value=f.name.replace(/\.[^.]+$/,"").replace(/^\d+[\s._-]+/,"").replace(/[_]+/g," ").trim()}
+  computePeaks(f);
+}
+function bindDeck(){
+  const pl=$("#player");
+  $("#playBtn").onclick=()=>{if(pl.paused)pl.play().catch(()=>toast("Przeglądarka nie odtworzy tego formatu — Gemini i tak go przeanalizuje"));else pl.pause()};
+  pl.onplay=()=>{setPlayIcon(true);const loop=()=>{drawWave();wave.raf=requestAnimationFrame(loop)};cancelAnimationFrame(wave.raf);loop()};
+  pl.onpause=pl.onended=()=>{setPlayIcon(false);cancelAnimationFrame(wave.raf);drawWave()};
+  $("#wave").onclick=e=>{const r=e.currentTarget.getBoundingClientRect();if(pl.duration){pl.currentTime=(e.clientX-r.left)/r.width*pl.duration;drawWave()}};
+  $("#swapBtn").onclick=()=>$("#fileIn").click();
+  window.addEventListener("resize",()=>drawWave());
+  matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change",()=>drawWave());
+}
+async function init(){
+  renderStatus();
+  if(isFramed()) $("#framedWarn").hidden=false;
+  await Promise.race([load(),new Promise(r=>setTimeout(r,2500))]);
+  $$("nav.tabs button").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
+  const drop=$("#drop"), fi=$("#fileIn");
+  drop.onclick=()=>fi.click();drop.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();fi.click()}};
+  fi.onchange=()=>setFile(fi.files[0]);
+  ["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("on")}));
+  ["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("on")}));
+  drop.addEventListener("drop",e=>setFile(e.dataTransfer.files[0]));
+  bindDeck();
+  $("#runBtn").onclick=run;$("#stopBtn").onclick=()=>current.ctl?.abort();
+  $("#addArtistBtn").onclick=()=>{const n=$("#newArtist").value.trim();if(!n)return;const a=ensureArtist(n);current.artistSel=a.id;$("#newArtist").value="";save();renderArtists();renderArtistOpts()};
+  $("#rulesTxt").value=DB.rules;$("#examplesTxt").value=DB.examples;$("#pitchLang").value=DB.lang;
+  $("#saveRules").onclick=()=>{DB.rules=$("#rulesTxt").value;save();toast("Zapisano zasady")};
+  $("#resetRules").onclick=()=>{$("#rulesTxt").value=DEFAULT_RULES;toast("Przywrócono — kliknij Zapisz, żeby zatwierdzić")};
+  $("#saveExamples").onclick=()=>{DB.examples=$("#examplesTxt").value;DB.lang=$("#pitchLang").value;save();toast("Zapisano")};
+  $("#gKey").value=LS.get("gkey","");$("#aKey").value=LS.get("akey","");$("#aModel").value=LS.get("amodel","claude-opus-5-5");$("#engine").value=LS.get("engine","gemini");
+  $("#claudeBox").hidden=$("#engine").value!=="claude";$("#engine").onchange=()=>$("#claudeBox").hidden=$("#engine").value!=="claude";
+  let cached=[];try{cached=JSON.parse(LS.get("models","[]"))}catch{}fillModelSelects(cached);
+  $("#loadModels").onclick=loadModels;$("#saveSettings").onclick=saveSettings;
+  $("#testConn").onclick=async e=>{saveSettings();const b=e.currentTarget;b.disabled=true;try{const r=await gemini([{text:"Odpowiedz jednym słowem: OK"}],{temperature:0});let msg="Gemini: "+r.text.trim().slice(0,20);if(LS.get("engine","gemini")==="claude"){msg+=" · Claude: "+(await claudeCall("Reply with one word: OK")).trim().slice(0,20)}toast(msg)}catch(er){toast(er.message.slice(0,200))}finally{b.disabled=false}};
+  $("#exportBtn").onclick=()=>download(`soundvice-pitchlab-${new Date().toISOString().slice(0,10)}.json`,JSON.stringify(DB,null,2));
+  $("#importBtn").onclick=()=>$("#importIn").click();
+  $("#importIn").onchange=async()=>{try{const d=JSON.parse(await $("#importIn").files[0].text());if(!d.artists||!Array.isArray(d.tracks))throw new Error("To nie jest kopia pitchLAB");DB=Object.assign({artists:{},tracks:[],rules:DEFAULT_RULES,examples:"",lang:"en"},d);save();init2();toast("Zaimportowano")}catch(e){toast(e.message)}};
+  $("#wipeBtn").onclick=()=>$("#wipeConfirm").hidden=false;
+  $("#wipeConfirm").onclick=()=>{DB={artists:{},tracks:[],rules:DEFAULT_RULES,examples:"",lang:"en"};save();init2();$("#wipeConfirm").hidden=true;toast("Baza wyczyszczona")};
+  init2();
+  if(!LS.get("gkey","")) switchTab("settings");
+}
+function init2(){$("#rulesTxt").value=DB.rules;$("#examplesTxt").value=DB.examples;$("#pitchLang").value=DB.lang;renderArtistOpts();renderHistory();renderStatus();current.trackId=DB.tracks[0]?.id||null;renderResult()}
+init();
+</script>
+</body>
+</html>
