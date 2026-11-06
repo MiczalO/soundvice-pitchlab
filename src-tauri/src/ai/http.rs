@@ -17,8 +17,18 @@ pub fn client() -> reqwest::Client {
 /// Wysyła żądanie; przy 429 czeka (Retry-After, domyślnie 20 s, max 60 s)
 /// i ponawia dokładnie raz. Brak dalszych pętli.
 pub async fn send(service: &'static str, make: impl Fn() -> RequestBuilder) -> AppResult<Response> {
+    send_with(service, true, make).await
+}
+
+/// To samo co `send`, ale `retry_429 = false` zwraca 429 od razu (bez czekania i ponowienia) —
+/// dla wywołań, w których limit zwykle oznacza brak przydziału (np. wyszukiwarka Google).
+pub async fn send_with(
+    service: &'static str,
+    retry_429: bool,
+    make: impl Fn() -> RequestBuilder,
+) -> AppResult<Response> {
     let mut res = make().send().await?;
-    if res.status() == StatusCode::TOO_MANY_REQUESTS {
+    if retry_429 && res.status() == StatusCode::TOO_MANY_REQUESTS {
         let wait = retry_after(&res).unwrap_or(20).min(60);
         let body = res.text().await.unwrap_or_default();
         // Brak przydziału / limit dzienny: ponawianie nic nie da, więc nie czekamy.
@@ -36,9 +46,7 @@ fn is_hard_quota(body: &str) -> bool {
     if body.contains("PerMinute") {
         return false; // limit minutowy mija sam — jedno ponowienie ma sens
     }
-    body.contains("limit: 0")
-        || body.contains("PerDay")
-        || body.contains("exceeded your current quota")
+    body.contains("limit: 0") || body.contains("PerDay")
 }
 
 fn retry_after(res: &Response) -> Option<u64> {
@@ -117,12 +125,16 @@ mod tests {
     }
 
     #[test]
-    fn plan_quota_is_hard_but_per_minute_is_not() {
+    fn zero_or_daily_quota_is_hard_but_generic_or_per_minute_is_not() {
+        assert!(is_hard_quota("Quota exceeded ... limit: 0, model: x"));
         assert!(is_hard_quota(
+            "... GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+        ));
+        assert!(!is_hard_quota(
             "You exceeded your current quota, please check your plan"
         ));
         assert!(!is_hard_quota(
-            "You exceeded your current quota ... GenerateRequestsPerMinutePerProjectPerModel"
+            "... limit: 0 ... GenerateRequestsPerMinutePerProjectPerModel"
         ));
     }
 

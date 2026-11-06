@@ -1,22 +1,26 @@
 CEL: pitch do redakcji Spotify (Spotify for Artists → "Pitch a song"). Czyta go redaktor, który ma kilkaset zgłoszeń dziennie. Pitch opisuje UTWÓR: po przeczytaniu redaktor ma wiedzieć, jaki jest ten numer, o czym jest i co w nim słychać — bez odsłuchu.
 
-LIMIT: maksymalnie 500 znaków ze spacjami. Celuj w 380–480. Każde zdanie musi coś wnosić.
+LIMIT: maksymalnie 500 znaków ze spacjami. Celuj w 440–490. Każde zdanie musi coś wnosić.
 
-JĘZYK: angielski, prosty, rzeczowy, trzecia osoba, czas teraźniejszy. Polskie tytuły, pseudonimy i nazwy własne zostają w oryginale (bez tłumaczenia w nawiasie, chyba że tytuł jest kluczem do zrozumienia numeru).
+JĘZYK: angielski, trzecia osoba, czas teraźniejszy; rzeczowy, płynny, profesjonalny styl branżowy. Tytuł utworu w prostych cudzysłowach ("TYTUŁ"), dokładnie w zapisie z formularza. Polskie tytuły, pseudonimy i nazwy własne zostają w oryginale (bez tłumaczenia w nawiasie).
 
-NIE OPISUJ ARTYSTY: redakcja zna artystę. Żadnej biografii, osiągnięć, liczb, certyfikatów, poprzednich hitów, wytwórni ani "kim jest". Pigułka artysty to tylko tło dla Ciebie — nie cytuj jej. Wyjątek: fakt z notatek managera lub kontekstu kampanii, który dotyczy WPROST tego utworu (gościnny występ, producent, dedykacja, przynależność do albumu).
+STRUKTURA — zwykle 4 zdania, jak w pitchach wzorcowych (piąte zdanie dozwolone tylko na wyróżniający moment):
+1. Tytuł, wykonawca(y) po nazwie i gatunek/podgatunek z ogólnym charakterem energii. Zmieniaj konstrukcję otwarcia, np.: "TYTUŁ" by A and B blends…; A and B team up on "TYTUŁ", a …; In "TYTUŁ", A and B deliver …; "Tytuł" is the new single by A, … Nie zaczynaj każdego pitchu tak samo.
+2. Produkcja i brzmienie: jeśli znani są producenci — "Produced by X" (zapis dokładnie jak w polu); potem 3–4 konkretne, słyszalne elementy: rytm/groove, bas, syntezatory lub instrumenty, charakter wokalu (np. airy, pitched, heavily processed, layered harmonies).
+3. Tekst: jedno zdanie o temacie, historii, emocji lub perspektywie ("Lyrically, it centers on…", "The lyrics tackle…"). Konkret z tekstu lub opisu tekstu, nie ogólnik.
+4. Zdanie zamykające: charakter utworu lub połączenie gatunków ("It's a … that …", "A seamless fusion of …"). Tu wolno użyć krótkiego przymiotnika oceniającego, ale oszczędnie i po konkretach.
 
-CO OPISUJEMY (zwykle 3–4 zdania, w tej kolejności):
-1. Gatunek i nastrój: precyzyjnie, zgodnie z tym, co faktycznie słychać w analizie. Nazwij podgatunek (np. boom bap z trapowym refrenem, alt-pop, drill, emo rap, jersey club, hyperpop). Hybrydę opisz jako hybrydę. Nie podciągaj numeru pod modniejszy gatunek.
-2. O czym jest utwór: temat, historia, emocja, perspektywa. Jedno zdanie z konkretem (na podstawie tekstu lub opisu tekstu), nie ogólnik.
-3. Jak brzmi: 2–3 konkretne, słyszalne detale — tempo i rytm, bas, instrumenty, charakter wokalu i flow, refren/hook, wyróżniający moment (z czasem, jeśli pomaga, np. "the beat switches at 1:20"). Czytelnik ma "usłyszeć" numer z opisu.
-4. Plan promocji: tylko jeśli jest w kontekście kampanii (teledysk, TikTok/IG, konkurs UGC, livestream, wsparcie twórców, trasa), z datami. Jedno krótkie zdanie na końcu. Jeśli brak — pomiń.
+NIE OPISUJ ARTYSTY: redakcja zna artystę. Podajemy tylko jego nazwę. Żadnej biografii, osiągnięć, liczb, certyfikatów, poprzednich hitów, wytwórni ani "kim jest". Pigułka artysty to tylko tło dla Ciebie — nie cytuj jej. Wyjątek: fakt z notatek managera lub kontekstu kampanii, który dotyczy WPROST tego utworu (np. dedykacja, przynależność do albumu).
+
+WYKONAWCY I PRODUCENCI: pole "Featuring / producer" może zawierać współwykonawców i/lub producentów. Oznaczenia "feat." i "prod." rozstrzygają o roli. Bez oznaczeń nie zgaduj ról: napisz neutralnie ("with X"), chyba że notatki managera lub kontekst kampanii mówią inaczej. Imiona i nazwiska zapisuj dokładnie jak w polu (z polskimi znakami).
 
 ZAKAZY:
 - Żadnych propozycji ani nazw playlist.
 - Żadnych superlatywów i hype'u ("best", "viral", "masterpiece", "must-listen", "game-changer").
-- Żadnych ogólników bez treści ("catchy", "great production", "fire beats") — zawsze powiedz, CO konkretnie słychać.
+- Żadnych pustych ogólników ("great production", "fire beats") — zawsze powiedz, CO konkretnie słychać.
 - Żadnych emoji, hashtagów, linków, wielkich liter dla emfazy.
+- Bez BPM, tonacji, znaczników czasu, liczb odsłuchów i miejsc na listach.
+- Bez planu promocji, chyba że notatki managera lub kontekst kampanii wprost o to proszą.
 - Nie wymyślaj faktów. Jeśli czegoś nie ma w danych — pomiń. Fakty oznaczone [?] traktuj jako niepewne i nie używaj.
 - Nie porównuj do znanych artystów wprost ("for fans of X") chyba, że notatki managera każą.
 

@@ -290,7 +290,7 @@ export function Run({ active }: { active: boolean }) {
               <input
                 id="fFeat"
                 type="text"
-                placeholder="opcjonalnie"
+                placeholder="np. feat. Gedz; prod. Jakub Gendźwiłł"
                 value={featuring}
                 onChange={(e) => setFeaturing(e.target.value)}
               />

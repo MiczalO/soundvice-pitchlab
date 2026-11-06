@@ -13,10 +13,6 @@ use crate::error::{AppError, AppResult};
 use crate::jobs::{StepState, emit_step};
 use crate::settings;
 
-const NO_SEARCH_QUOTA: &str = "Wyszukiwarka Google w Gemini nie ma przydziału dla tego klucza \
-    (zwykle wymaga płatnego planu — włącz rozliczenia w Google AI Studio). \
-    Do tego czasu pigułkę możesz napisać ręcznie w karcie Artyści.";
-
 fn db_err() -> AppError {
     AppError::Db("blokada bazy".into())
 }
@@ -97,7 +93,9 @@ pub async fn run(
             emit_step(app, job_id, "research", StepState::Err, None);
             // Wyszukiwarka Google w Gemini ma osobny przydział (zwykle tylko płatny plan).
             return Err(match e {
-                AppError::RateLimited(svc, _) => AppError::RateLimited(svc, NO_SEARCH_QUOTA.into()),
+                AppError::RateLimited(svc, _) => {
+                    AppError::RateLimited(svc, gemini::NO_SEARCH_QUOTA.into())
+                }
                 other => other,
             });
         }

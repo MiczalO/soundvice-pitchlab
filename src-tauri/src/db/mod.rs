@@ -13,9 +13,13 @@ pub mod slug;
 /// Domyślne zasady pitchu (port 1:1 z prototypu, `DEFAULT_RULES`).
 pub const DEFAULT_RULES: &str = include_str!("default_rules.txt");
 
-/// Poprzednia domyślna wersja zasad (z prototypu). Jeśli użytkownik jej nie zmieniał,
-/// przy starcie dostaje nową domyślną jako kolejną wersję (stara zostaje w historii).
-const DEFAULT_RULES_V1: &str = include_str!("default_rules_v1.txt");
+/// Poprzednie domyślne wersje zasad (v1 z prototypu, v2 „opis utworu”). Jeśli użytkownik
+/// ich nie zmieniał, przy starcie dostaje obecną domyślną jako kolejną wersję
+/// (stare zostają w historii).
+const OLD_DEFAULT_RULES: [&str; 2] = [
+    include_str!("default_rules_v1.txt"),
+    include_str!("default_rules_v2.txt"),
+];
 
 static MIGRATIONS: LazyLock<Migrations<'static>> =
     LazyLock::new(|| Migrations::new(vec![M::up(include_str!("migrations/0001_init.sql"))]));
@@ -50,7 +54,10 @@ fn seed_defaults(conn: &Connection) -> rusqlite::Result<()> {
         [],
         |r| r.get(0),
     )?;
-    if current.trim() == DEFAULT_RULES_V1.trim() {
+    if OLD_DEFAULT_RULES
+        .iter()
+        .any(|old| old.trim() == current.trim())
+    {
         conn.execute(
             "INSERT INTO rules (kind, version, body, created_at)
              SELECT 'rules', MAX(version) + 1, ?1, ?2 FROM rules WHERE kind='rules'",
@@ -130,21 +137,20 @@ mod tests {
 
     #[test]
     fn untouched_old_default_rules_are_upgraded_once() {
-        let mut c = mem();
-        c.execute(
-            "UPDATE rules SET body=?1 WHERE kind='rules'",
-            [DEFAULT_RULES_V1],
-        )
-        .unwrap();
-        migrate(&mut c).unwrap();
-        migrate(&mut c).unwrap(); // drugi start nie dubluje
-        let n: i64 = c
-            .query_row("SELECT COUNT(*) FROM rules WHERE kind='rules'", [], |r| {
-                r.get(0)
-            })
-            .unwrap();
-        assert_eq!(n, 2);
-        assert_eq!(rules::current(&c, "rules"), DEFAULT_RULES);
+        for old in OLD_DEFAULT_RULES {
+            let mut c = mem();
+            c.execute("UPDATE rules SET body=?1 WHERE kind='rules'", [old])
+                .unwrap();
+            migrate(&mut c).unwrap();
+            migrate(&mut c).unwrap(); // drugi start nie dubluje
+            let n: i64 = c
+                .query_row("SELECT COUNT(*) FROM rules WHERE kind='rules'", [], |r| {
+                    r.get(0)
+                })
+                .unwrap();
+            assert_eq!(n, 2);
+            assert_eq!(rules::current(&c, "rules"), DEFAULT_RULES);
+        }
     }
 
     #[test]
@@ -160,7 +166,12 @@ mod tests {
     fn new_default_describes_the_track_not_the_artist() {
         assert!(DEFAULT_RULES.contains("NIE OPISUJ ARTYSTY"));
         assert!(DEFAULT_RULES.contains("LIMIT: maksymalnie 500 znaków ze spacjami"));
-        assert_ne!(DEFAULT_RULES.trim(), DEFAULT_RULES_V1.trim());
+        for old in OLD_DEFAULT_RULES {
+            assert_ne!(DEFAULT_RULES.trim(), old.trim());
+        }
+        // struktura jak w pitchach wzorcowych
+        assert!(DEFAULT_RULES.contains("Produced by X"));
+        assert!(DEFAULT_RULES.contains("Bez BPM, tonacji, znaczników czasu"));
     }
 
     #[test]

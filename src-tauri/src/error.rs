@@ -42,6 +42,12 @@ pub enum AppError {
 }
 
 impl AppError {
+    /// Limit, który nie zniknie po chwili (brak przydziału w planie lub limit dzienny).
+    pub fn is_hard_rate_limit(&self) -> bool {
+        matches!(self, AppError::RateLimited(_, d)
+            if d.contains("nie ma przydziału") || d.contains("dzienny limit"))
+    }
+
     pub fn code(&self) -> &'static str {
         match self {
             AppError::NoKey(_) => "no_key",

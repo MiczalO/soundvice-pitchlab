@@ -170,16 +170,27 @@ pub async fn generate(
     if opts.search {
         body["tools"] = json!([{ "google_search": {} }]);
     }
+    // Wyszukiwarka Google ma osobny przydział (zwykle tylko płatny plan): 429 przy niej
+    // oznacza brak przydziału, więc nie czekamy ani nie ponawiamy.
     let data: Value = cancellable(cancel, async {
-        let res = http::send("Gemini", || {
+        let res = http::send_with("Gemini", !opts.search, || {
             c.post(&url).header("x-goog-api-key", &key).json(&body)
         })
-        .await?;
+        .await
+        .map_err(|e| match e {
+            AppError::RateLimited(svc, _) if opts.search => {
+                AppError::RateLimited(svc, NO_SEARCH_QUOTA.into())
+            }
+            other => other,
+        })?;
         Ok(res.json::<Value>().await?)
     })
     .await?;
     parse_generated(&data)
 }
+
+/// Komunikat przy 429 na wyszukiwarce Google (traktowany jak brak przydziału).
+pub const NO_SEARCH_QUOTA: &str = "Wyszukiwarka Google w Gemini nie ma przydziału dla tego klucza     (zwykle wymaga płatnego planu — włącz rozliczenia w Google AI Studio).     Do tego czasu pigułkę możesz napisać ręcznie w karcie Artyści.";
 
 pub fn parse_generated(data: &Value) -> AppResult<Generated> {
     let cand = data["candidates"]

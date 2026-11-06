@@ -9,6 +9,9 @@ use tokio_util::sync::CancellationToken;
 
 use crate::error::{AppError, AppResult};
 
+/// Tyle rund z rzędu zakończonych samym limitem zapytań, po których się poddajemy.
+const MAX_RATE_LIMIT_ROUNDS: u32 = 4;
+
 /// Po tylu minutach nieprzerwanych porażek poddajemy się z ostatnim błędem.
 pub const MAX_TOTAL: Duration = Duration::from_secs(15 * 60);
 
@@ -18,6 +21,8 @@ pub fn is_retryable(e: &AppError) -> bool {
         AppError::Overloaded(_) | AppError::Timeout | AppError::Network => true,
         // Model bywa niedeterministyczny: nieczytelną odpowiedź warto powtórzyć.
         AppError::ModelOutput(_) => true,
+        // Chwilowy limit zapytań (np. na minutę) mija sam; brak przydziału — nie.
+        AppError::RateLimited(..) => !e.is_hard_rate_limit(),
         AppError::Api { status, .. } => matches!(status, 500 | 502 | 504),
         _ => false,
     }
@@ -60,6 +65,7 @@ where
     }
     let started = Instant::now();
     let mut round = 0u32;
+    let mut rate_rounds = 0u32;
     let mut last: Option<AppError> = None;
     loop {
         let mut i = 0;
@@ -89,6 +95,15 @@ where
         }
         if pool.is_empty() || started.elapsed() >= max_total {
             return Err(last.unwrap_or(AppError::Timeout));
+        }
+        // Same limity zapytań rundę po rundzie: dajmy im szansę, ale nie w nieskończoność.
+        if matches!(last, Some(AppError::RateLimited(..))) {
+            rate_rounds += 1;
+            if rate_rounds >= MAX_RATE_LIMIT_ROUNDS {
+                return Err(last.unwrap_or(AppError::Timeout));
+            }
+        } else {
+            rate_rounds = 0;
         }
         round += 1;
         let pause = wait(round);
@@ -182,7 +197,10 @@ mod tests {
                 calls.lock().unwrap().push(m.clone());
                 async move {
                     match m.as_str() {
-                        "pro" => Err(AppError::RateLimited("Gemini", "brak przydziału".into())),
+                        "pro" => Err(AppError::RateLimited(
+                            "Gemini",
+                            "Ten model nie ma przydziału".into(),
+                        )),
                         "old" => Err(AppError::Api {
                             service: "Gemini",
                             status: 404,
@@ -200,6 +218,51 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn transient_rate_limit_is_retried_then_succeeds() {
+        let n = AtomicU32::new(0);
+        let (v, _) = run(
+            &models(&["a"]),
+            &CancellationToken::new(),
+            MAX_TOTAL,
+            fast,
+            &quiet,
+            |_| {
+                let c = n.fetch_add(1, Ordering::SeqCst);
+                async move {
+                    if c < 2 {
+                        Err(AppError::RateLimited("Gemini", "Odczekaj chwilę".into()))
+                    } else {
+                        Ok(7)
+                    }
+                }
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(v, 7);
+    }
+
+    #[tokio::test]
+    async fn endless_transient_rate_limit_gives_up_after_a_few_rounds() {
+        let n = AtomicU32::new(0);
+        let e = run(
+            &models(&["a"]),
+            &CancellationToken::new(),
+            MAX_TOTAL,
+            fast,
+            &quiet,
+            |_| {
+                n.fetch_add(1, Ordering::SeqCst);
+                async { Err::<(), _>(AppError::RateLimited("Gemini", "Odczekaj chwilę".into())) }
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(e.code(), "rate_limited");
+        assert_eq!(n.load(Ordering::SeqCst), MAX_RATE_LIMIT_ROUNDS);
+    }
+
+    #[tokio::test]
     async fn gives_up_when_every_model_is_unusable() {
         let e = run(
             &models(&["a", "b"]),
@@ -207,7 +270,12 @@ mod tests {
             MAX_TOTAL,
             fast,
             &quiet,
-            |_| async { Err::<(), _>(AppError::RateLimited("Gemini", "brak przydziału".into())) },
+            |_| async {
+                Err::<(), _>(AppError::RateLimited(
+                    "Gemini",
+                    "Ten model nie ma przydziału".into(),
+                ))
+            },
         )
         .await
         .unwrap_err();
@@ -293,7 +361,18 @@ mod tests {
             status: 404,
             message: String::new()
         }));
-        assert!(!is_retryable(&AppError::RateLimited("G", String::new())));
+        assert!(is_retryable(&AppError::RateLimited(
+            "G",
+            "Odczekaj chwilę".into()
+        )));
+        assert!(!is_retryable(&AppError::RateLimited(
+            "G",
+            "Ten model nie ma przydziału".into()
+        )));
+        assert!(!is_retryable(&AppError::RateLimited(
+            "G",
+            "Wyczerpany dzienny limit".into()
+        )));
         assert!(!is_retryable(&AppError::BadKey("G")));
     }
 }
