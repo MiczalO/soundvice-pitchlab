@@ -1,4 +1,5 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { check } from "@tauri-apps/plugin-updater";
 import {
   AudioLines,
   Clock,
@@ -65,10 +66,24 @@ export default function App() {
   const [side, setSide] = useState<Side>(readSide);
   const narrow = useNarrow();
   const collapsed = side === "collapsed" || (side === "auto" && narrow);
+  const updateChecked = useRef(false);
+  const ready0 = useApp((s) => s.ready);
+  const notify = useApp((s) => s.notify);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // Ciche sprawdzenie aktualizacji po starcie; brak sieci lub błąd nie przeszkadza w pracy.
+  useEffect(() => {
+    if (!ready0 || updateChecked.current) return;
+    updateChecked.current = true;
+    check()
+      .then((u) => {
+        if (u) notify(`Dostępna wersja ${u.version} — Ustawienia → Aktualizacje`);
+      })
+      .catch(() => {});
+  }, [ready0, notify]);
 
   const toggleSide = () => {
     const next: Side = collapsed ? "expanded" : "collapsed";

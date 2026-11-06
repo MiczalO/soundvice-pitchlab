@@ -1,0 +1,132 @@
+name: Release
+
+# Wydanie powstaje po wypchnięciu tagu wersji, np.:  git tag v0.1.0 && git push origin v0.1.0
+# Powstaje szkic wydania (draft) z instalatorami; po sprawdzeniu kliknij „Publish release”.
+# Aktualizacje w aplikacji działają dopiero po opublikowaniu wydania (nie jako szkic).
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  guard:
+    name: Sprawdzenie wersji i konfiguracji
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wersja z tagu zgadza się z plikami projektu
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg=$(node -p "require('./package.json').version")
+          conf=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          cargo=$(grep -m1 '^version' src-tauri/Cargo.toml | sed -E 's/version *= *"([^"]+)"/\1/')
+          echo "tag=$tag package.json=$pkg tauri.conf.json=$conf Cargo.toml=$cargo"
+          if [ "$tag" != "$pkg" ] || [ "$tag" != "$conf" ] || [ "$tag" != "$cargo" ]; then
+            echo "::error::Wersja w tagu ($tag) musi być taka sama w package.json, tauri.conf.json i Cargo.toml."
+            exit 1
+          fi
+      - name: Endpoint aktualizacji jest ustawiony
+        shell: bash
+        run: |
+          if grep -q '/OWNER/' src-tauri/tauri.conf.json; then
+            echo "::error::W src-tauri/tauri.conf.json zamień OWNER w adresie aktualizacji na właściciela repozytorium GitHub."
+            exit 1
+          fi
+
+  build:
+    name: Instalator (${{ matrix.name }})
+    needs: guard
+    runs-on: ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            args: ""
+          - name: macOS Apple Silicon
+            platform: macos-latest
+            target: aarch64-apple-darwin
+            args: "--target aarch64-apple-darwin"
+          - name: macOS Intel
+            platform: macos-latest
+            target: x86_64-apple-darwin
+            args: "--target x86_64-apple-darwin"
+    env:
+      # Wszystkie sekrety są opcjonalne: bez nich powstają niepodpisane instalatory.
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.target }}
+
+      - run: npm ci
+
+      # --- aktualizacje w aplikacji: artefakty tylko, gdy jest klucz podpisu ---
+      - name: Włącz artefakty aktualizacji (jest klucz podpisu)
+        if: env.TAURI_SIGNING_PRIVATE_KEY != ''
+        shell: bash
+        run: |
+          node -e "const fs=require('fs');const f='src-tauri/tauri.conf.json';const c=JSON.parse(fs.readFileSync(f,'utf8'));c.bundle.createUpdaterArtifacts=true;fs.writeFileSync(f,JSON.stringify(c,null,2))"
+      - name: Brak klucza podpisu aktualizacji
+        if: env.TAURI_SIGNING_PRIVATE_KEY == ''
+        shell: bash
+        run: echo "::warning::Brak sekretu TAURI_SIGNING_PRIVATE_KEY - wydanie nie będzie zawierać plików aktualizacji (latest.json), więc aplikacje nie zaktualizują się automatycznie."
+
+      # --- Windows: opcjonalne podpisywanie certyfikatem (PFX w base64) ---
+      - name: Importuj certyfikat Windows i ustaw podpisywanie
+        if: matrix.platform == 'windows-latest' && env.WINDOWS_CERTIFICATE != ''
+        shell: pwsh
+        run: |
+          New-Item -ItemType directory -Path certificate | Out-Null
+          Set-Content -Path certificate/tempCert.txt -Value $env:WINDOWS_CERTIFICATE
+          certutil -decode certificate/tempCert.txt certificate/certificate.pfx | Out-Null
+          $pw = ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD -Force -AsPlainText
+          $cert = Import-PfxCertificate -FilePath certificate/certificate.pfx -CertStoreLocation Cert:\CurrentUser\My -Password $pw
+          $env:CERT_THUMBPRINT = $cert.Thumbprint
+          node -e "const fs=require('fs');const f='src-tauri/tauri.conf.json';const c=JSON.parse(fs.readFileSync(f,'utf8'));c.bundle.windows=Object.assign(c.bundle.windows||{},{certificateThumbprint:process.env.CERT_THUMBPRINT,digestAlgorithm:'sha256',timestampUrl:'http://timestamp.digicert.com'});fs.writeFileSync(f,JSON.stringify(c,null,2))"
+      - name: Windows bez certyfikatu
+        if: matrix.platform == 'windows-latest' && env.WINDOWS_CERTIFICATE == ''
+        shell: bash
+        run: echo "::warning::Brak sekretu WINDOWS_CERTIFICATE - instalator nie będzie podpisany (SmartScreen pokaże ostrzeżenie)."
+
+      - name: macOS bez certyfikatu Apple
+        if: runner.os == 'macOS' && env.APPLE_CERTIFICATE == ''
+        shell: bash
+        run: echo "::warning::Brak sekretów Apple - aplikacja nie będzie podpisana ani notaryzowana (Gatekeeper zablokuje pierwsze uruchomienie)."
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Soundvice pitchLAB ${{ github.ref_name }}"
+          releaseBody: "Instalatory do pobrania poniżej (Windows: .exe lub .msi, macOS: .dmg). Instrukcja instalacji i klucza API: README."
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}

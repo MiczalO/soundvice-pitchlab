@@ -304,6 +304,7 @@ const commands: Record<string, (a: Record<string, unknown>) => unknown> = {
   export_backup: () => ({ path: "C:/mock/kopia.zip", audio_files: 0, size: 17_779 }),
   restore_backup: () => null,
   get_data_dir: () => "C:/mock",
+  "plugin:updater|check": () => null,
   "plugin:dialog|open": () => "C:/mock/plik",
   "plugin:dialog|save": () => "C:/mock/kopia.zip",
   "plugin:opener|reveal_item_in_dir": () => null,

@@ -20,19 +20,64 @@
       }
     ],
     "security": {
-      "csp": null,
-      "assetProtocol": { "enable": true, "scope": ["$APPDATA/audio/**"] }
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: asset: http://asset.localhost; media-src 'self' blob: asset: http://asset.localhost; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$APPDATA/audio/**"
+        ]
+      }
     }
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": [
+      "nsis",
+      "msi",
+      "dmg"
+    ],
+    "createUpdaterArtifacts": false,
+    "publisher": "Repitch",
+    "copyright": "Repitch",
+    "category": "Music",
+    "shortDescription": "Pitche do Spotify for Artists na podstawie odsłuchu utworu.",
+    "longDescription": "Soundvice pitchLAB: odsłuch utworu przez Gemini, pigułki artystów i pitche redakcyjne do Spotify for Artists.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": [
+          "Polish",
+          "English"
+        ],
+        "displayLanguageSelector": false
+      },
+      "wix": {
+        "language": "pl-PL"
+      },
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDE1NUVFRTM1MkI0RDZFRjIKUldUeWJrMHJOZTVlRmVJMDFmZnFvK1ZRYWdaQ1FmMXlZclN5TmR1Wk1DUjlqMEV2L2tKaVRacGQK",
+      "endpoints": [
+        "https://github.com/MiczalO/soundvice-pitchlab/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

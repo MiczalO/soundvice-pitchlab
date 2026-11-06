@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { DataPanel } from "../components/DataPanel";
+import { UpdatePanel } from "../components/UpdatePanel";
 import { modelLabel, useModels } from "../components/Models";
 import { api, toAppError, type SecretName } from "../lib/api";
 import { useApp, type Theme } from "../lib/store";
@@ -212,6 +213,8 @@ export function Settings() {
           </div>
           <div className="sep" />
           <DataPanel />
+          <div className="sep" />
+          <UpdatePanel version={version} />
           <div className="sep" />
           <h2>O aplikacji</h2>
           <p className="hint">Soundvice pitchLAB · wersja {version || "—"}</p>
