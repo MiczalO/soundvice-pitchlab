@@ -25,7 +25,11 @@ pub fn slugify(s: &str) -> String {
         }
     }
     let t = out.trim_matches('-');
-    if t.is_empty() { "artysta".to_string() } else { t.to_string() }
+    if t.is_empty() {
+        "artysta".to_string()
+    } else {
+        t.to_string()
+    }
 }
 
 /// Podstawowe łacińskie litery z akcentami (á, é, ü, ñ …) → ASCII.

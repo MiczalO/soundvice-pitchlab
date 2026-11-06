@@ -1,11 +1,11 @@
+pub mod ai;
+mod commands;
 pub mod db;
+pub mod error;
+pub mod secrets;
+pub mod settings;
 
 use tauri::Manager;
-
-#[tauri::command]
-fn app_version(app: tauri::AppHandle) -> String {
-    app.package_info().version.to_string()
-}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -18,7 +18,16 @@ pub fn run() {
             app.manage(db);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![app_version])
+        .invoke_handler(tauri::generate_handler![
+            commands::app_version,
+            commands::set_secret,
+            commands::has_secret,
+            commands::delete_secret,
+            commands::get_settings,
+            commands::set_setting,
+            commands::list_gemini_models,
+            commands::test_connection,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

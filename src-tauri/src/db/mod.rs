@@ -9,9 +9,8 @@ pub mod slug;
 /// Domyślne zasady pitchu (port 1:1 z prototypu, `DEFAULT_RULES`).
 pub const DEFAULT_RULES: &str = include_str!("default_rules.txt");
 
-static MIGRATIONS: LazyLock<Migrations<'static>> = LazyLock::new(|| {
-    Migrations::new(vec![M::up(include_str!("migrations/0001_init.sql"))])
-});
+static MIGRATIONS: LazyLock<Migrations<'static>> =
+    LazyLock::new(|| Migrations::new(vec![M::up(include_str!("migrations/0001_init.sql"))]));
 
 pub struct Db(pub Mutex<Connection>);
 
@@ -73,11 +72,15 @@ mod tests {
     fn migrate_creates_schema_and_seeds_rules() {
         let c = mem();
         let n: i64 = c
-            .query_row("SELECT COUNT(*) FROM rules WHERE kind='rules'", [], |r| r.get(0))
+            .query_row("SELECT COUNT(*) FROM rules WHERE kind='rules'", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         assert_eq!(n, 1);
         let body: String = c
-            .query_row("SELECT body FROM rules WHERE kind='rules'", [], |r| r.get(0))
+            .query_row("SELECT body FROM rules WHERE kind='rules'", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         assert!(body.contains("LIMIT: maksymalnie 500 znaków"));
     }
@@ -103,10 +106,20 @@ mod tests {
     #[test]
     fn deleting_artist_cascades() {
         let c = mem();
-        c.execute("INSERT INTO artists (name, slug, created_at, updated_at) VALUES ('A','a',0,0)", []).unwrap();
-        c.execute("INSERT INTO tracks (artist_id, created_at) VALUES (1, 0)", []).unwrap();
+        c.execute(
+            "INSERT INTO artists (name, slug, created_at, updated_at) VALUES ('A','a',0,0)",
+            [],
+        )
+        .unwrap();
+        c.execute(
+            "INSERT INTO tracks (artist_id, created_at) VALUES (1, 0)",
+            [],
+        )
+        .unwrap();
         c.execute("DELETE FROM artists WHERE id=1", []).unwrap();
-        let n: i64 = c.query_row("SELECT COUNT(*) FROM tracks", [], |r| r.get(0)).unwrap();
+        let n: i64 = c
+            .query_row("SELECT COUNT(*) FROM tracks", [], |r| r.get(0))
+            .unwrap();
         assert_eq!(n, 0);
     }
 }
