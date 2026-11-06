@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useModels } from "../components/Models";
+import { modelLabel, useModels } from "../components/Models";
 import { api, toAppError, type SecretName } from "../lib/api";
 import { useApp, type Theme } from "../lib/store";
 
@@ -63,7 +63,7 @@ function KeyField(props: {
 
 export function Settings() {
   const { settings, saveSetting, hasGemini, hasAnthropic, notify } = useApp();
-  const { models, load, loading, error } = useModels();
+  const { models, status, load, loading, error } = useModels();
   const [version, setVersion] = useState("");
   const [testing, setTesting] = useState(false);
   const [claudeModel, setClaudeModel] = useState(settings.claude_model ?? "claude-opus-5-5");
@@ -78,7 +78,11 @@ export function Settings() {
 
   const options = (current?: string) => {
     const list = models.length ? models : current ? [current] : [];
-    return list.map((m) => <option key={m}>{m}</option>);
+    return list.map((m) => (
+      <option key={m} value={m}>
+        {modelLabel(m, status)}
+      </option>
+    ));
   };
 
   const test = async () => {
@@ -119,11 +123,14 @@ export function Settings() {
             hint="Z Google AI Studio → Get API key."
           />
           <div className="row">
-            <button className="btn" disabled={!hasGemini || loading} onClick={load}>
-              {loading ? "Pobieram…" : "Pobierz listę modeli"}
+            <button className="btn" disabled={!hasGemini || loading} onClick={() => load(false)}>
+              {loading ? "Sprawdzam modele…" : "Pobierz i sprawdź modele"}
             </button>
             <span className="hint">
-              {error ?? (models.length ? `${models.length} modeli · na górze najnowsze Pro` : "")}
+              {error ??
+                (models.length
+                  ? `${models.filter((m) => status[m] === "ok").length} z ${models.length} modeli działa dla Twojego klucza`
+                  : "")}
             </span>
           </div>
           <div className="field">

@@ -60,6 +60,12 @@ pub async fn list_gemini_models() -> AppResult<Vec<String>> {
     within(45, gemini::list_models()).await
 }
 
+/// Sprawdza, które modele faktycznie odpowiadają dla tego klucza i planu.
+#[tauri::command]
+pub async fn probe_gemini_models(models: Vec<String>) -> AppResult<Vec<gemini::Probe>> {
+    within(60, gemini::probe_models(models)).await
+}
+
 #[derive(Serialize)]
 pub struct ConnectionReport {
     pub gemini: Option<String>,

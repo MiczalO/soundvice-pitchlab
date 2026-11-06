@@ -31,6 +31,7 @@ pub fn run() {
             commands::get_settings,
             commands::set_setting,
             commands::list_gemini_models,
+            commands::probe_gemini_models,
             commands::test_connection,
             commands::prepare_audio,
             commands::start_analysis,

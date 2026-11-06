@@ -49,6 +49,11 @@ export const api = {
   getSettings: () => invoke<Record<string, string>>("get_settings"),
   setSetting: (key: string, value: string) => invoke<void>("set_setting", { key, value }),
   listGeminiModels: () => withTimeout(invoke<string[]>("list_gemini_models"), 60_000),
+  probeGeminiModels: (models: string[]) =>
+    withTimeout(
+      invoke<{ model: string; status: string }[]>("probe_gemini_models", { models }),
+      90_000,
+    ),
   testConnection: (args: { geminiModel?: string; claudeModel?: string; checkClaude: boolean }) =>
     withTimeout(
       invoke<{ gemini: string | null; claude: string | null }>("test_connection", args),

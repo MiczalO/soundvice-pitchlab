@@ -16,6 +16,7 @@ pub const ALLOWED: &[&str] = &[
     "pitch_lang",
     "onboarded",
     "gemini_models_cache",
+    "gemini_model_status",
 ];
 
 pub fn get_all(conn: &Connection) -> AppResult<HashMap<String, String>> {

@@ -49,6 +49,8 @@ const EXCLUDED: &[&str] = &[
     "aqa",
     "robotics",
     "computer-use",
+    "transcribe",
+    "banana",
 ];
 
 /// Filtr i ranking z prototypu (`loadModels`), z poprawką: stabilne przed „preview”.
@@ -337,6 +339,68 @@ pub async fn upload_file(
     }
 }
 
+/// Wynik sondowania modelu: czy da się z niego realnie skorzystać.
+#[derive(Debug, Clone, serde::Serialize, PartialEq)]
+pub struct Probe {
+    pub model: String,
+    /// ok | retired | quota | overloaded | timeout | error
+    pub status: &'static str,
+}
+
+/// Mapowanie odpowiedzi HTTP na status modelu (lista modeli z API nie mówi,
+/// czy model jest dostępny dla danego klucza i planu).
+pub fn probe_status(http: u16) -> &'static str {
+    match http {
+        200..=299 => "ok",
+        404 => "retired",
+        429 => "quota",
+        503 | 529 => "overloaded",
+        _ => "error",
+    }
+}
+
+/// Równolegle wysyła jedno malutkie zapytanie do każdego modelu (bez ponowień,
+/// 25 s na model) i zwraca statusy w kolejności wejścia.
+pub async fn probe_models(models: Vec<String>) -> AppResult<Vec<Probe>> {
+    let key = key()?;
+    let c = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(25))
+        .build()
+        .map_err(|_| AppError::Network)?;
+    let body = json!({
+        "contents": [{"role": "user", "parts": [{"text": "Odpowiedz jednym słowem: OK"}]}],
+        "generationConfig": {"temperature": 0}
+    });
+    let tasks: Vec<_> = models
+        .into_iter()
+        .map(|model| {
+            let (c, key, body) = (c.clone(), key.clone(), body.clone());
+            tokio::spawn(async move {
+                let url = format!("{BASE}/v1beta/models/{model}:generateContent");
+                let status = match c
+                    .post(&url)
+                    .header("x-goog-api-key", &key)
+                    .json(&body)
+                    .send()
+                    .await
+                {
+                    Err(_) => "timeout",
+                    Ok(res) => probe_status(res.status().as_u16()),
+                };
+                Probe { model, status }
+            })
+        })
+        .collect();
+    let mut out = Vec::with_capacity(tasks.len());
+    for t in tasks {
+        if let Ok(p) = t.await {
+            out.push(p);
+        }
+    }
+    Ok(out)
+}
+
 /// Krótkie zapytanie sprawdzające klucz i model.
 pub async fn ping(model: &str) -> AppResult<String> {
     let key = key()?;
@@ -387,6 +451,25 @@ mod tests {
     fn blocked_prompt_is_readable_error() {
         let e = parse_generated(&json!({"promptFeedback":{"blockReason":"SAFETY"}})).unwrap_err();
         assert!(e.to_string().contains("SAFETY"));
+    }
+
+    #[test]
+    fn probe_status_mapping() {
+        assert_eq!(probe_status(200), "ok");
+        assert_eq!(probe_status(404), "retired");
+        assert_eq!(probe_status(429), "quota");
+        assert_eq!(probe_status(503), "overloaded");
+        assert_eq!(probe_status(500), "error");
+    }
+
+    #[test]
+    fn drops_transcribe_and_banana_models() {
+        let r = filter_and_rank(v(&[
+            "gemini-3.5-transcribe",
+            "gemini-nano-banana-2.1",
+            "gemini-3.5-flash",
+        ]));
+        assert_eq!(r, v(&["gemini-3.5-flash"]));
     }
 
     #[test]

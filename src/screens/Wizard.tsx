@@ -1,18 +1,27 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Brand } from "../components/Brand";
-import { useModels } from "../components/Models";
+import { modelLabel, useModels } from "../components/Models";
 import { api, toAppError } from "../lib/api";
 import { useApp } from "../lib/store";
 
 export function Wizard() {
-  const { settings, saveSetting, refreshKeys, notify } = useApp();
-  const { models, load, loading, error } = useModels();
+  const { settings, hasGemini, saveSetting, refreshKeys, notify } = useApp();
+  const { models, status, load, loading, error } = useModels();
   const [key, setKey] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [step, setStep] = useState<1 | 2>(1);
   const [limited, setLimited] = useState(false);
+  // Klucz już w sejfie (np. po przerwanym kreatorze) → od razu krok 2, bez ponownego wpisywania.
+  const step = hasGemini ? 2 : 1;
+  const autoProbed = useRef(false);
+
+  useEffect(() => {
+    if (hasGemini && !autoProbed.current && Object.keys(status).length === 0) {
+      autoProbed.current = true;
+      void load(true);
+    }
+  }, [hasGemini, status, load]);
 
   const connect = async () => {
     setBusy(true);
@@ -20,12 +29,13 @@ export function Wizard() {
     try {
       await api.setSecret("gemini", key);
       setKey("");
-      const list = await load();
+      autoProbed.current = true;
+      const list = await load(true);
       if (!list.length) throw new Error("Nie udało się pobrać listy modeli — sprawdź klucz.");
       await refreshKeys();
-      setStep(2);
     } catch (e) {
       await api.deleteSecret("gemini").catch(() => {});
+      await refreshKeys();
       setErr(toAppError(e).message);
     } finally {
       setBusy(false);
@@ -45,8 +55,8 @@ export function Wizard() {
     } catch (e) {
       const ae = toAppError(e);
       setErr(ae.message);
-      // Klucz jest poprawny (lista modeli się pobrała) — limit dotyczy tylko wybranego modelu.
-      setLimited(ae.code === "rate_limited" || ae.code === "overloaded");
+      // Klucz jest poprawny (lista modeli się pobrała) — problem dotyczy tylko wybranego modelu.
+      setLimited(["rate_limited", "overloaded", "timeout"].includes(ae.code));
     } finally {
       setBusy(false);
     }
@@ -54,8 +64,28 @@ export function Wizard() {
 
   const startAnyway = async () => {
     await saveSetting("onboarded", "1");
-    notify("Klucz działa. Zmień model w Ustawieniach, jeśli ten ma wyczerpany limit.");
+    notify("Klucz działa. Zmień model w Ustawieniach, jeśli ten nie odpowiada.");
   };
+
+  const modelSelect = (id: string, key: string, label: string) => (
+    <div className="field">
+      <label htmlFor={id}>{label}</label>
+      <select
+        id={id}
+        value={settings[key] ?? ""}
+        onChange={(e) => saveSetting(key, e.target.value)}
+        disabled={loading}
+      >
+        {models.map((m) => (
+          <option key={m} value={m}>
+            {modelLabel(m, status)}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+
+  const working = models.filter((m) => status[m] === "ok").length;
 
   return (
     <main className="wrap" style={{ maxWidth: 640, paddingTop: 48 }}>
@@ -106,44 +136,46 @@ export function Wizard() {
                 disabled={busy || loading || !key.trim()}
                 onClick={connect}
               >
-                {busy || loading ? "Łączę…" : "Połącz i pobierz modele"}
+                {busy || loading ? "Łączę i sprawdzam modele…" : "Połącz i pobierz modele"}
               </button>
             </div>
+            {(busy || loading) && (
+              <span className="hint">
+                Sprawdzam, które modele naprawdę odpowiadają dla Twojego klucza (do 30 s).
+              </span>
+            )}
           </div>
         ) : (
           <div className="panel">
-            <div className="field">
-              <label htmlFor="wModel">Model do odsłuchu i analizy</label>
-              <select
-                id="wModel"
-                value={settings.gemini_model ?? ""}
-                onChange={(e) => saveSetting("gemini_model", e.target.value)}
-              >
-                {models.map((m) => (
-                  <option key={m}>{m}</option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="wModelR">Model do researchu (Google Search)</label>
-              <select
-                id="wModelR"
-                value={settings.gemini_model_research ?? ""}
-                onChange={(e) => saveSetting("gemini_model_research", e.target.value)}
-              >
-                {models.map((m) => (
-                  <option key={m}>{m}</option>
-                ))}
-              </select>
-              <span className="hint">Domyślnie wybrany jest najnowszy model „pro”.</span>
-            </div>
-            {err && <div className="err-box">{err}</div>}
+            {loading ? (
+              <p className="hint">
+                Sprawdzam, które modele naprawdę odpowiadają dla Twojego klucza (do 30 s)…
+              </p>
+            ) : (
+              <>
+                {modelSelect("wModel", "gemini_model", "Model do odsłuchu i analizy")}
+                {modelSelect(
+                  "wModelR",
+                  "gemini_model_research",
+                  "Model do researchu (Google Search)",
+                )}
+                <span className="hint">
+                  {working
+                    ? `Działających modeli: ${working}. Wybrany został pierwszy z nich.`
+                    : "Żaden model nie odpowiedział poprawnie — spróbuj ponownie za chwilę."}
+                </span>
+              </>
+            )}
+            {(err || error) && <div className="err-box">{err || error}</div>}
             <div className="row">
-              <button className="btn primary big" disabled={busy} onClick={finish}>
+              <button className="btn primary big" disabled={busy || loading} onClick={finish}>
                 {busy ? "Sprawdzam…" : "Sprawdź i zacznij"}
               </button>
+              <button className="btn" disabled={busy || loading} onClick={() => load(true)}>
+                Sprawdź modele ponownie
+              </button>
               {limited && (
-                <button className="btn" disabled={busy} onClick={startAnyway}>
+                <button className="btn" disabled={busy || loading} onClick={startAnyway}>
                   Zacznij mimo to
                 </button>
               )}
